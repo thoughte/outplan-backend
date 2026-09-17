@@ -1,0 +1,104 @@
+// outplan backend schema.
+//
+// Prisma owns the ordinary relational models here. It does NOT own the
+// knowledge tree: ltree paths, generated tsvector columns and pgvector live in
+// raw SQL migrations and are read through $queryRaw in a repository layer.
+// See .claude/tech-stack.md for why, and for what was rejected.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // No `url` here. Prisma 7 removed it: the connection string lives in
+  // prisma.config.ts for Migrate, and reaches the client through the pg adapter
+  // in src/lib/prisma.ts. One source, read once, in env.config.
+}
+
+enum Role {
+  member
+  clinician
+  admin
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  role      Role     @default(member)
+  timezone  String   @default("Asia/Kolkata")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  exchanges   Exchange[]
+  corrections Correction[]
+
+  @@map("users")
+}
+
+/// One thing the person said, and what came back.
+///
+/// `said` is stored BEFORE anything interprets it. The parse, the engine state
+/// and the reply are all derived columns - if any of them is wrong, the
+/// original is still here to derive again. A record that keeps only the
+/// interpretation cannot be re-read when the interpreter turns out to be wrong,
+/// and this interpreter has been wrong five times in ten days.
+model Exchange {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  said   String   @db.Text
+  saidAt DateTime @default(now()) @map("said_at")
+  /// 'YYYY-MM-DD' in the PERSON'S timezone, as text rather than a date column.
+  /// A date read back by a client in another zone can shift by a day, and "which
+  /// day did I eat that" must not depend on where the reader is standing. Text
+  /// sorts and ranges correctly and cannot be reinterpreted.
+  localDay String @map("local_day") @db.VarChar(10)
+
+  /// What the deterministic engines made of it: parsed meal, totals, flags,
+  /// which rules fired. Null means nothing recognised it, which is a fact worth
+  /// keeping rather than an absence to fill in later.
+  parsed Json?
+
+  /// What was replied, and what produced it. promptVersion and model are here so
+  /// a bad answer can be traced to the configuration that produced it - without
+  /// them, an eval cannot tell a prompt regression from a model change.
+  replied       String?  @db.Text
+  repliedAt     DateTime? @map("replied_at")
+  model         String?
+  promptVersion String?  @map("prompt_version")
+
+  corrections Correction[]
+
+  @@index([userId, localDay])
+  @@map("exchanges")
+}
+
+/// The person telling us we were wrong, and what was right instead.
+///
+/// A ROW, never an edit. The original reply stays. A wrong answer plus the
+/// correct one plus the reason is the training pair, and editing the original
+/// destroys the half that is hard to get. This is the only data in this product
+/// that cannot be bought.
+model Correction {
+  id         String   @id @default(uuid()) @db.Uuid
+  exchangeId String   @map("exchange_id") @db.Uuid
+  exchange   Exchange @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+  userId     String   @map("user_id") @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// In the person's own words. Not a category, not a rating.
+  wasWrong  String  @map("was_wrong") @db.Text
+  isRight   String? @map("is_right") @db.Text
+
+  /// Which knowledge branch this bears on, for later grouping. Nullable: forcing
+  /// a domain at capture time would make the person classify their own
+  /// correction, and a misfiled correction is worse than an unfiled one.
+  domain String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("corrections")
+}
