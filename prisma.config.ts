@@ -1,12 +1,18 @@
+import dotenv from 'dotenv';
 import { defineConfig } from 'prisma/config';
-import { ENV_CONFIG } from './src/config/env.config';
 
-/** Migrate's view of the database. The runtime client does not read this - it
- *  gets its connection through the pg adapter in src/lib/prisma.ts. Both read
- *  the same ENV_CONFIG, so there is one source for the URL and no second place
- *  to forget to update. */
+dotenv.config();
+
+/** Migrate's view of the database.
+ *
+ *  This reads process.env directly rather than importing ENV_CONFIG, because it
+ *  runs in the production image where only dist/ exists - an import of
+ *  ./src/config/env.config resolves to nothing there, and the migration fails
+ *  before it reaches the database. The runtime client gets its connection
+ *  through the pg adapter in src/lib/prisma.ts.
+ */
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: { path: 'prisma/migrations' },
-  datasource: { url: ENV_CONFIG.DATABASE_URL },
+  datasource: { url: process.env.DATABASE_URL ?? '' },
 });

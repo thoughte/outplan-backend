@@ -13,6 +13,9 @@ RUN npx prisma generate && npm run build
 
 # Drop dev dependencies AFTER building - tsc and prisma are needed above and
 # nowhere below.
+# Prune dev dependencies AFTER building - tsc and the Prisma generator are
+# needed above. prisma and ts-node survive this because migrate deploy runs in
+# the runtime stage and needs both.
 RUN npm prune --omit=dev
 
 FROM node:22-alpine AS runtime
@@ -26,6 +29,11 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
+# ts-node is needed to read prisma.config.ts, and prisma itself is a runtime
+# dependency because migrate deploy runs at boot. Both were pruned before; the
+# container came up, answered 503 forever, and said exactly why.
+COPY --from=build /app/node_modules/ts-node ./node_modules/ts-node
+COPY --from=build /app/node_modules/typescript ./node_modules/typescript
 
 # Run as a non-root user. The image ships one; use it.
 USER node
