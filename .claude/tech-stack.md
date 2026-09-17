@@ -22,6 +22,24 @@
 | `pg_trgm` | optional | fuzzy search fallback; degrade quietly if absent |
 | `pgvector` | optional | semantic search. **Not installed in production.** Every reference must sit inside a conditional block |
 
+## DECIDED 17 Sep 2026
+
+**Prisma boundary: CONFIRMED** as described below — Prisma for relational models, raw SQL
+migrations for extension-dependent objects, repository layer for tree traversal.
+
+**The API contract is an OpenAPI spec this repo owns and publishes.** The frontend is a pure
+HTTP consumer and shares no code with the backend. Clients generate their types from the spec:
+TypeScript for web today, Swift or Kotlin for mobile when Keshav joins. The owner's reasoning,
+which decided it: *"I want frontend to call backend just through API... we anyway need to build
+API for later to build the app. So why not now?"*
+
+Consequence: backend and frontend stay separate repos. A monorepo was considered and rejected —
+its only real advantage was importing types across the boundary, and a published spec serves web
+and mobile equally where a shared TypeScript folder serves neither of the mobile targets.
+
+Consequence: **the spec is a deliverable, not documentation.** It is generated from the route
+definitions rather than hand-written, so it cannot drift from the implementation.
+
 ## Prisma boundary — the decision this project turns on
 
 Prisma does not model ltree, generated tsvector columns, or vector. The boundary:

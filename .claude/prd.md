@@ -7,6 +7,26 @@ Derived from `/Users/work/Claude/Health/app/claude-rules-v2/.claude/prd.md` — 
 The whole product, minus the UI. Database, five engines, system prompts, the reasoning path,
 and the public API. No rendering — the current app's server-rendered HTML is not being ported.
 
+## The first feature, decided 17 Sep 2026
+
+**The talk surface and the exchange log.** A place the owner types what he ate, how he slept and
+what hurt; it stores his words verbatim, parses what it can with the ported engines, answers via
+the Anthropic API, and records his corrections as first-class rows.
+
+This is built HERE rather than bolted onto the live app, at his instruction. The cost is
+acknowledged: he cannot use it for some weeks, and until then every correction is logged by hand
+into the health record.
+
+Two rules the schema must enforce, not merely follow:
+
+1. **Verbatim before parsed.** The person's words are stored before anything interprets them.
+2. **Corrections are rows, never edits.** The original answer stays. A wrong answer plus the right
+   one plus the reason is the training pair; editing destroys it. This is the only data this
+   product has that nobody else can buy.
+
+Endpoints, confirmed: `GET /talk`, `POST /talk`, `POST /talk/:id/correct`, `GET /talk/export`.
+All protected, own-data-only. Nothing public, nothing readable across users.
+
 ## Order of work
 
 1. **Schema, complete, before anything else.** The owner's instruction: a strong DB first.
