@@ -75,11 +75,61 @@ async function main(): Promise<void> {
     console.log(`    ${pad(u.email, 32)}${num(mine.length, 6)}${num(mine.filter((e) => e.replied).length, 10)}${num(typed, 11)}${num(corr, 13)}`);
   }
 
+  // ---- the failure modes that actually happened ---------------------------
+  //
+  // Reply LENGTH was the headline number here and it was the wrong one. It
+  // reported prompt v2 as the big win - 249 characters down to 86 - and those
+  // 86 characters were "Nahi." repeated at someone until they left. Short is
+  // not good. Short is just short.
+  //
+  // These three are what went wrong in the first real conversation, so these
+  // are what get counted.
+  console.log('\n  FAILURE MODES');
+
+  const replies = exchanges.filter((e) => e.replied).map((e) => e.replied!);
+
+  // Repetition: does a reply reuse a six-word run from an earlier one? The
+  // broken-record failure looked exactly like this - the same sentence offered
+  // eight times until the person stopped answering.
+  const shingles = (t: string) => {
+    const w = t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    return new Set(Array.from({ length: Math.max(0, w.length - 5) }, (_, i) => w.slice(i, i + 6).join(' ')));
+  };
+  const seen = new Set<string>();
+  let repeated = 0;
+  for (const r of replies) {
+    const sh = shingles(r);
+    if ([...sh].some((x) => seen.has(x))) repeated++;
+    sh.forEach((x) => seen.add(x));
+  }
+
+  // Deflection: refusing the conversation instead of steering it. Counted on
+  // what the MODEL said, never on what the person said.
+  const DEFLECT = [
+    /main yahan hoon/i, /health ki baat/i, /nahi karunga/i, /mera kaam nahi/i,
+    /only here for/i, /i'?m here when/i, /not here to/i, /sahi jagah nahi/i,
+  ];
+  const deflected = replies.filter((r) => DEFLECT.some((rx) => rx.test(r))).length;
+
+  const withQ = exchanges.filter((e) => (parts(e) as { question?: unknown } | null)?.question).length;
+  const withParts = exchanges.filter((e) => (parts(e) as { messages?: unknown[] } | null)?.messages?.length).length;
+
+  const pc = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '-');
+  console.log(`    repeats itself      ${num(repeated, 4)} of ${replies.length}   ${pc(repeated, replies.length)}   <- broken record`);
+  console.log(`    deflects            ${num(deflected, 4)} of ${replies.length}   ${pc(deflected, replies.length)}   <- refusing instead of steering`);
+  console.log(`    asks a question     ${num(withQ, 4)} of ${withParts}   ${pc(withQ, withParts)}   <- tappable options`);
+
   // ---- what to look at ----------------------------------------------------
   const v3 = exchanges.filter((e) => e.promptVersion?.endsWith('@3'));
   const notes: string[] = [];
-  if (v3.length && !v3.some((e) => (parts(e) as { question?: unknown } | null)?.question)) {
-    notes.push('The reply tool has a question field and it has never been used. The prompt is likely gating it too hard.');
+  if (withParts > 3 && withQ === 0) {
+    notes.push('The question field has never been used. The prompt is gating it too hard.');
+  }
+  if (replies.length > 5 && deflected / replies.length > 0.2) {
+    notes.push(`${pc(deflected, replies.length)} of replies deflect rather than steer. Nothing is off topic - a fight at college IS health.`);
+  }
+  if (replies.length > 5 && repeated / replies.length > 0.25) {
+    notes.push(`${pc(repeated, replies.length)} of replies repeat an earlier one. Offered twice and not taken means drop it.`);
   }
   if (exchanges.length > 10 && corrections.length === 0) {
     notes.push('No corrections at all. The whole training-data argument rests on these existing.');

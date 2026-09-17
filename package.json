@@ -9,7 +9,8 @@
     "start": "node ./dist/src/index.js",
     "typecheck": "tsc --noEmit",
     "config:fingerprint": "ts-node ./scripts/fingerprint.ts",
-    "diag": "ts-node ./scripts/diagnose.ts"
+    "diag": "ts-node ./scripts/diagnose.ts",
+    "transcript": "ts-node ./scripts/transcript.ts"
   },
   "keywords": [],
   "author": "",
