@@ -103,6 +103,18 @@ model Exchange {
   /// a bad answer can be traced to the configuration that produced it - without
   /// them, an eval cannot tell a prompt regression from a model change.
   replied       String?  @db.Text
+
+  /// The reply as it should be SHOWN: a short sequence of message bubbles, and
+  /// optionally one question with tappable options.
+  ///
+  /// `replied` stays the flat joined text, because that is what the next turn's
+  /// history needs - a model reading its own previous answer does not need to
+  /// know it arrived in three bubbles. Rendering and remembering are different
+  /// jobs and this is the seam between them.
+  ///
+  /// Shape: { messages: string[], question?: { text: string, options: string[] } }
+  replyParts    Json?    @map("reply_parts")
+
   repliedAt     DateTime? @map("replied_at")
   model         String?
   promptVersion String?  @map("prompt_version")

@@ -12,11 +12,11 @@ export const talkRepo = {
 
   attachReply: (
     id: string,
-    data: { replied: string; model: string; promptVersion: string | null },
+    data: { replied: string; replyParts: unknown; model: string; promptVersion: string | null },
   ): Promise<Exchange> =>
     prisma.exchange.update({
       where: { id },
-      data: { ...data, repliedAt: new Date() },
+      data: { ...data, replyParts: data.replyParts as never, repliedAt: new Date() },
     }),
 
   attachParse: (id: string, parsed: unknown): Promise<Exchange> =>

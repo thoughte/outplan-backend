@@ -27,6 +27,8 @@ export interface ExchangeResponse {
   localDay: string;
   parsed: unknown;
   replied: string | null;
+  /** { messages: string[], question?: { text, options[] } } - how to SHOW it. */
+  replyParts: unknown;
   repliedAt: string | null;
   model: string | null;
   promptVersion: string | null;
@@ -43,6 +45,7 @@ export function toExchangeResponse(
     localDay: e.localDay,
     parsed: e.parsed,
     replied: e.replied,
+    replyParts: e.replyParts,
     repliedAt: e.repliedAt ? e.repliedAt.toISOString() : null,
     model: e.model,
     promptVersion: e.promptVersion,

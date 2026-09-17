@@ -91,6 +91,7 @@ export const talkService: TalkService = {
       if (result) {
         await talkRepo.attachReply(exchange.id, {
           replied: result.text,
+          replyParts: result.parts,
           model: result.model,
           promptVersion: `${prompt.key}@${prompt.version}`,
         });
