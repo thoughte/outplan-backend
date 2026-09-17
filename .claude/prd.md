@@ -1,6 +1,6 @@
 # outplan backend — PRD
 
-Derived from `../../.claude/prd.md`. Read that first; it holds the eight non-negotiables.
+Derived from `/Users/work/Claude/Health/app/claude-rules-v2/.claude/prd.md` — **read that first**, it holds the eight non-negotiables that must not be re-litigated.
 
 ## Scope
 
