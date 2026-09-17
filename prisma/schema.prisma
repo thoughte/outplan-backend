@@ -159,3 +159,31 @@ model AppConfig {
 
   @@map("app_config")
 }
+
+/// A system prompt, versioned.
+///
+/// Prompts live here rather than in source for one reason that matters: an
+/// answer must be traceable to the exact text that produced it. Exchange stores
+/// promptVersion, so when a reply turns out to be wrong it is possible to say
+/// which prompt said it - and an eval can tell a prompt regression apart from a
+/// model change. A prompt edited in place makes both impossible.
+///
+/// Rows are never updated. A change is a new version; activation moves.
+model Prompt {
+  id      String @id @default(uuid()) @db.Uuid
+  key     String
+  version Int
+
+  content String  @db.Text
+  notes   String? @db.Text
+
+  /// Exactly one version per key is active. Enforced by a partial unique index
+  /// in a raw migration - Prisma cannot express "unique where active".
+  active Boolean @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([key, version])
+  @@index([key, active])
+  @@map("prompts")
+}

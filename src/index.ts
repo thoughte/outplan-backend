@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'node:http';
 import { ENV_CONFIG, assertConfig } from './config/env.config';
 import { getSetting, seedSettings } from './config/app.config';
+import { ensureDefaultPrompts } from './modules/prompt/defaults';
 import { setupAppRoutes } from './routes.setup';
 
 function createApp() {
@@ -42,6 +43,13 @@ async function main() {
   await seedSettings().catch((e) => {
     console.error('[config] could not seed settings:', e.message,
       '- serving defaults, which are the restrictive ones');
+  });
+
+  // Prompts, like settings, arrive with the code rather than by someone
+  // remembering to run a script. Never overwrites an existing active version.
+  await ensureDefaultPrompts().catch((e) => {
+    console.error('[prompts] could not apply defaults:', e.message,
+      '- talk will store words but produce no reply');
   });
 
   const server = http.createServer(createApp());

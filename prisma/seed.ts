@@ -1,16 +1,9 @@
-/** Reference data, applied like a migration.
- *
- *  Deployment is a git push - there is no step where anyone runs a seed script
- *  against production, and expecting one is how the knowledge tree ends up empty
- *  on the only machine that matters. Every writer here must be an upsert.
- */
+/** Manual seed entry point. The real work is in src/modules/prompt/defaults.ts
+ *  and runs at boot, because deployment is a git push and nobody runs this. */
 import { prisma } from '../src/lib/prisma';
+import { ensureDefaultPrompts } from '../src/modules/prompt/defaults';
 
-async function main(): Promise<void> {
-  // departments, knowledge nodes, lexicons - ported from app/outplan
-  console.log('[seed] nothing to seed yet');
-}
-
-main()
+ensureDefaultPrompts()
+  .then(() => console.log('[seed] default prompts applied'))
   .catch((e) => { console.error('[seed]', e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });

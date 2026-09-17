@@ -10,6 +10,7 @@ import { authMiddleware, requireSession } from './middleware/auth.middleware';
 import { notFoundMiddleware, errorMiddleware } from './middleware/error.middleware';
 import { userController } from './modules/user/controller';
 import { authSessionController } from './modules/auth-session/controller';
+import { talkController } from './modules/talk/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -81,6 +82,14 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.list);
   app.delete(API_PREFIX + ALL_ROUTES.sessions.one, authSessionController.revokeOne);
   app.delete(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.revokeAll);
+
+  // /talk/export before /talk/:id - Express matches in registration order, and
+  // the other way round "export" is read as an id and the route is dead.
+  app.get(API_PREFIX + ALL_ROUTES.talk.export, talkController.exportAll);
+  app.post(API_PREFIX + ALL_ROUTES.talk.base, talkController.say);
+  app.get(API_PREFIX + ALL_ROUTES.talk.base, talkController.list);
+  app.get(API_PREFIX + ALL_ROUTES.talk.one, talkController.one);
+  app.post(API_PREFIX + ALL_ROUTES.talk.correct, talkController.correct);
 
   // --- ADMIN BOUNDARY -----------------------------------------------------
   // app.use(API_PREFIX + '/admin', requireRole('admin'));

@@ -12,8 +12,10 @@ export const ALL_ROUTES = {
 
   talk: {
     base: '/talk',
+    // NOTE: /talk/export must be registered BEFORE /talk/:id, or Express matches
+    // "export" as an id and the export route becomes unreachable.
+    export: '/talk/export',
     one: '/talk/:id',
     correct: '/talk/:id/correct',
-    export: '/talk/export',
   },
 } as const;
