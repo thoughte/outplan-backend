@@ -23,6 +23,10 @@ export interface AppSettings {
   'reasoning.enabled': boolean;
   'app.timezone': string;
   'talk.max_message_chars': number;
+  /** How many past exchanges are sent with a new message. Zero means each
+   *  message is answered in isolation, which is how this shipped and was
+   *  immediately, correctly, called out. */
+  'talk.context_exchanges': number;
 }
 
 const DEFAULTS: AppSettings = {
@@ -31,6 +35,7 @@ const DEFAULTS: AppSettings = {
   'reasoning.enabled': false,
   'app.timezone': 'Asia/Kolkata',
   'talk.max_message_chars': 8000,
+  'talk.context_exchanges': 30,
 };
 
 const TTL_MS = 30_000;

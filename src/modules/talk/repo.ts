@@ -40,6 +40,23 @@ export const talkRepo = {
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
     }),
 
+  /** The last N exchanges, returned OLDEST FIRST.
+   *
+   *  Taken newest-first by the database so "the last 30" is cheap, then
+   *  reversed - a conversation handed to a model in reverse order is worse than
+   *  no conversation, because it reads as a coherent sequence that says the
+   *  opposite of what happened.
+   */
+  async recent(userId: string, limit: number, beforeId?: string): Promise<WithCorrections[]> {
+    const rows = await prisma.exchange.findMany({
+      where: { userId, ...(beforeId ? { id: { not: beforeId } } : {}) },
+      include: { corrections: { orderBy: { createdAt: 'asc' } } },
+      orderBy: { saidAt: 'desc' },
+      take: limit,
+    });
+    return rows.reverse();
+  },
+
   /** Everything, oldest first. For the person's own export - not paginated,
    *  because "give me my data" that returns a page is not giving them their
    *  data. */
