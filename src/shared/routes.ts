@@ -3,6 +3,8 @@
 export const ALL_ROUTES = {
   health: '/health',
 
+  me: '/me',
+
   talk: {
     base: '/talk',
     one: '/talk/:id',
