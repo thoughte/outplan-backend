@@ -102,3 +102,22 @@ model Correction {
   @@index([userId, createdAt])
   @@map("corrections")
 }
+
+/// Runtime configuration, changeable without a redeploy.
+///
+/// Only three things stay in the environment: DATABASE_URL, and the two
+/// Anthropic values. Everything else lives here - the owner's instruction, and
+/// the right call: a CORS origin or a model name that requires a rebuild to
+/// change is not configuration, it is a constant with extra steps.
+///
+/// Values are jsonb so a setting can be a string, a number, a list or an object
+/// without a schema change every time one is added.
+model AppConfig {
+  key         String   @id
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+
+  @@map("app_config")
+}
