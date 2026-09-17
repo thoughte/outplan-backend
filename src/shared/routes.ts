@@ -5,6 +5,11 @@ export const ALL_ROUTES = {
 
   me: '/me',
 
+  sessions: {
+    base: '/sessions',
+    one: '/sessions/:id',
+  },
+
   talk: {
     base: '/talk',
     one: '/talk/:id',

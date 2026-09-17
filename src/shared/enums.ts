@@ -2,6 +2,7 @@ export enum HttpHeader {
   Authorization = 'authorization',
   ContentType = 'content-type',
   RequestId = 'x-request-id',
+  SessionId = 'x-session-id',
 }
 
 export enum HttpStatusCode {

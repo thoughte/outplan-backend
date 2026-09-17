@@ -15,4 +15,7 @@ export type HttpCode = 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503;
  *  after it; every route that reads it must sit behind it in routes.setup. */
 export interface AuthenticatedRequest extends Request {
   user?: { id: string; email: string; role: 'member' | 'clinician' | 'admin' };
+  /** The live session this request belongs to. Present on every route except
+   *  the one that creates a session. */
+  sessionId?: string;
 }

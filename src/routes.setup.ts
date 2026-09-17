@@ -5,9 +5,11 @@ import { HttpStatusCode } from './shared/enums';
 import { databaseHealth } from './lib/prisma';
 import { ENV_CONFIG } from './config/env.config';
 import { fingerprint } from './config/fingerprint';
-import { authMiddleware } from './middleware/auth.middleware';
+import { getSetting } from './config/app.config';
+import { authMiddleware, requireSession } from './middleware/auth.middleware';
 import { notFoundMiddleware, errorMiddleware } from './middleware/error.middleware';
 import { userController } from './modules/user/controller';
+import { authSessionController } from './modules/auth-session/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -40,7 +42,17 @@ export function setupAppRoutes(app: Express): void {
       firebase_service_account: fingerprint(ENV_CONFIG.FIREBASE_SERVICE_ACCOUNT),
     };
 
-    const ok = db.up && db.migrated && Object.values(config).every((c) => c.present);
+    // `ok` means "can this process do its job", not "is every variable set".
+    // The database and Firebase are required to serve anything at all. The
+    // Anthropic key is required only when reasoning is switched on - marking a
+    // container unhealthy over a key nothing calls yet would have the platform
+    // restarting a working service.
+    const reasoning = await getSetting('reasoning.enabled').catch(() => false);
+    const required = reasoning
+      ? (['database_url', 'firebase_service_account', 'anthropic_api_key'] as const)
+      : (['database_url', 'firebase_service_account'] as const);
+
+    const ok = db.up && db.migrated && required.every((k) => config[k].present);
     res.status(ok ? HttpStatusCode.Ok : HttpStatusCode.ServiceUnavailable).json({
       ok, db, config, at: new Date().toISOString(),
     });
@@ -53,9 +65,22 @@ export function setupAppRoutes(app: Express): void {
   // --- AUTH BOUNDARY ------------------------------------------------------
   app.use(API_PREFIX, authMiddleware);
 
+  // --- token verified, session NOT yet required ---------------------------
+  // Registering a device is the one call that cannot require a session: it is
+  // the call that creates one.
+  app.post(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.start);
+
+  // --- SESSION BOUNDARY ---------------------------------------------------
+  // Below this line a request needs a live session as well as a valid token.
+  app.use(API_PREFIX, requireSession);
+
   // --- authenticated ------------------------------------------------------
   app.get(API_PREFIX + ALL_ROUTES.me, userController.me);
   app.patch(API_PREFIX + ALL_ROUTES.me, userController.updateMe);
+
+  app.get(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.list);
+  app.delete(API_PREFIX + ALL_ROUTES.sessions.one, authSessionController.revokeOne);
+  app.delete(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.revokeAll);
 
   // --- ADMIN BOUNDARY -----------------------------------------------------
   // app.use(API_PREFIX + '/admin', requireRole('admin'));

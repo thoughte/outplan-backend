@@ -32,8 +32,46 @@ model User {
 
   exchanges   Exchange[]
   corrections Correction[]
+  sessions    AuthSession[]
 
   @@map("users")
+}
+
+/// One signed-in device.
+///
+/// Firebase alone cannot answer "where am I logged in" or "log out that phone"
+/// - it has no way to enumerate a user's live tokens, and revokeRefreshTokens
+/// kills every device at once. This table is what makes both possible, and for
+/// a record holding someone's medications that is not a nicety.
+///
+/// A request must carry BOTH a valid Firebase token and a live session id. A
+/// stolen token alone is therefore not enough, which is a security gain on top
+/// of the feature.
+model AuthSession {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// What the person will recognise in a list: "Chrome on macOS".
+  label     String?
+  userAgent String? @map("user_agent") @db.Text
+
+  /// Kept for "signed in from somewhere new", not for geolocation. Truncated to
+  /// a /24 before storage - enough to notice a change, not enough to place
+  /// someone at an address.
+  ipPrefix String? @map("ip_prefix")
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+
+  /// Revoked rather than deleted. "This device was signed out at 3am" is
+  /// something the person may need to see afterwards, and a deleted row cannot
+  /// tell them.
+  revokedAt DateTime? @map("revoked_at")
+  revokedBy String?   @map("revoked_by")
+
+  @@index([userId, revokedAt])
+  @@map("auth_sessions")
 }
 
 /// One thing the person said, and what came back.
