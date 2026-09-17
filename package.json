@@ -7,7 +7,8 @@
     "dev": "nodemon",
     "build": "tsc",
     "start": "node ./dist/src/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "config:fingerprint": "ts-node ./scripts/fingerprint.ts"
   },
   "keywords": [],
   "author": "",
