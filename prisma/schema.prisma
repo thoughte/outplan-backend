@@ -34,6 +34,24 @@ model User {
   corrections Correction[]
   sessions    AuthSession[]
 
+  /// Everything older than the live context window, compacted into prose.
+  ///
+  /// Without this, a long history is simply lost: the window fills, the oldest
+  /// turns fall off the end, and something told two hundred messages ago stops
+  /// existing. The summary is what makes the memory outlast the window.
+  contextSummary        String?   @map("context_summary") @db.Text
+  /// Everything said up to and including this moment is inside the summary.
+  /// Anything after it is still in the live window and must not be summarised
+  /// twice - that is how a summary drifts into saying things that never happened.
+  contextSummaryThrough DateTime? @map("context_summary_through")
+
+  reports       Report[]
+  measurements  Measurement[]
+  symptoms      Symptom[]
+  interventions Intervention[]
+  observations  Observation[]
+  markers       GeneticMarker[]
+
   @@map("users")
 }
 
@@ -198,4 +216,165 @@ model Prompt {
   @@unique([key, version])
   @@index([key, active])
   @@map("prompts")
+}
+
+// ---------------------------------------------------------------- the record
+//
+// Everything below is the person's own health record. It is separate from
+// exchanges on purpose: a conversation is what was said, a record is what is
+// true, and the two decay at completely different rates. A meal logged in chat
+// is interesting for a week; a testosterone result matters for years.
+
+enum ReportKind {
+  blood
+  urine
+  genetic
+  imaging
+  body_metrics
+  self_reported
+  other
+}
+
+enum SymptomStatus {
+  active
+  improving
+  resolved
+}
+
+enum InterventionKind {
+  medication
+  supplement
+  protocol
+}
+
+/// One measurement event - a blood draw, a scan, a set of numbers.
+model Report {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The date the SAMPLE was taken, never the date the lab issued the report.
+  /// Trends are only meaningful against collection dates, and the two can be
+  /// weeks apart.
+  collectedOn DateTime   @map("collected_on") @db.Date
+  kind        ReportKind
+  lab         String?
+  fasting     Boolean?
+  notes       String?    @db.Text
+
+  measurements Measurement[]
+  markers      GeneticMarker[]
+
+  @@index([userId, collectedOn])
+  @@map("reports")
+}
+
+/// One value from one report.
+model Measurement {
+  id       String @id @default(uuid()) @db.Uuid
+  reportId String @map("report_id") @db.Uuid
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String @map("user_id") @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Canonical key, e.g. testosterone_total. The printed label is kept too,
+  /// because labs name the same analyte differently and the printed form is the
+  /// only way to check a mapping later.
+  variable String
+  label    String?
+
+  value     Float?
+  valueText String? @map("value_text")
+  unit      String?
+  panel     String?
+  /// Assay method. Two labs measuring the same thing differently produce a
+  /// trend that is an artefact, and without this nobody can tell.
+  method    String?
+  notes     String? @db.Text
+
+  /// Denormalised from the report so a trend query does not need the join.
+  collectedOn DateTime @map("collected_on") @db.Date
+
+  @@index([userId, variable, collectedOn])
+  @@map("measurements")
+}
+
+/// Something the person is experiencing, and what is known about it.
+model Symptom {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name       String
+  /// The full reasoning: mechanism, what rules it in, what rules it out. Long
+  /// by design and never shown whole to the model - the brief takes the name
+  /// and the status, and this is here for when someone asks.
+  detail     String?       @db.Text
+  status     SymptomStatus @default(active)
+  reportedOn DateTime      @map("reported_on") @db.Date
+  resolvedOn DateTime?     @map("resolved_on") @db.Date
+
+  @@index([userId, status])
+  @@map("symptoms")
+}
+
+/// A medicine, supplement or protocol, and whether it is still running.
+model Intervention {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  kind      InterventionKind
+  dose      String?
+  schedule  String?
+  startedOn DateTime? @map("started_on") @db.Date
+  /// Set rather than deleting the row. What someone used to take, and when they
+  /// stopped, is clinical information - a deleted row cannot say either.
+  stoppedOn DateTime? @map("stopped_on") @db.Date
+  reason    String?   @db.Text
+  notes     String?   @db.Text
+
+  @@index([userId, stoppedOn])
+  @@map("interventions")
+}
+
+/// A day's worth of what actually happened - meals, sleep, adherence, symptoms.
+model Observation {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'YYYY-MM-DD' in the person's timezone, as text. A date column read by a
+  /// client elsewhere can shift by a day, and which day something happened must
+  /// not depend on where the reader is standing.
+  localDay String @map("local_day") @db.VarChar(10)
+  variable String
+  value    String @db.Text
+  notes    String? @db.Text
+
+  @@index([userId, localDay])
+  @@map("observations")
+}
+
+/// A genetic result. Kept whole, deliberately excluded from the assistant's
+/// brief: 573 markers would drown every other fact, and almost none of them
+/// change what to do tomorrow.
+model GeneticMarker {
+  id       String  @id @default(uuid()) @db.Uuid
+  reportId String  @map("report_id") @db.Uuid
+  report   Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String  @map("user_id") @db.Uuid
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  section  String?
+  trait    String
+  gene     String?
+  snp      String?
+  genotype String?
+  result   String?
+  notes    String? @db.Text
+
+  @@index([userId, trait])
+  @@map("genetic_markers")
 }

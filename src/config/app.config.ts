@@ -27,15 +27,19 @@ export interface AppSettings {
    *  message is answered in isolation, which is how this shipped and was
    *  immediately, correctly, called out. */
   'talk.context_exchanges': number;
+  /** Token budget for conversation history. Anything that does not fit is
+   *  compacted into a summary rather than dropped. */
+  'talk.context_token_budget': number;
 }
 
 const DEFAULTS: AppSettings = {
   'cors.origins': [],
-  'reasoning.model': 'claude-sonnet-5',
+  'reasoning.model': 'claude-opus-5',
   'reasoning.enabled': false,
   'app.timezone': 'Asia/Kolkata',
   'talk.max_message_chars': 8000,
-  'talk.context_exchanges': 30,
+  'talk.context_exchanges': 200,
+  'talk.context_token_budget': 24000,
 };
 
 const TTL_MS = 30_000;

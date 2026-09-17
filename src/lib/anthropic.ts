@@ -91,7 +91,7 @@ export async function reason(
   if (!ENV_CONFIG.ANTHROPIC_API_KEY) return null;
   if (!(await getSetting('reasoning.enabled').catch(() => false))) return null;
 
-  const model = await getSetting('reasoning.model').catch(() => 'claude-sonnet-5');
+  const model = await getSetting('reasoning.model').catch(() => 'claude-opus-5');
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), opts.timeoutMs ?? 60_000);
 
@@ -188,4 +188,43 @@ function normalise(input: unknown): ReplyParts | null {
   }
 
   return question ? { messages, question } : { messages };
+}
+
+
+/** A plain text call, no reply tool.
+ *
+ *  Used for work that is not a reply to a person - compacting a transcript,
+ *  for instance. Forcing the reply tool there would produce chat bubbles where
+ *  a summary was wanted.
+ */
+export async function reasonPlain(
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  opts: { maxTokens?: number; timeoutMs?: number } = {},
+): Promise<string | null> {
+  if (!ENV_CONFIG.ANTHROPIC_API_KEY) return null;
+  const model = await getSetting('reasoning.model').catch(() => 'claude-opus-5');
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opts.timeoutMs ?? 90_000);
+  try {
+    const res = await fetch(`${ENV_CONFIG.ANTHROPIC_BASE_URL.replace(/\/+$/, '')}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ENV_CONFIG.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model, max_tokens: opts.maxTokens ?? 1024, system, messages }),
+      signal: ctl.signal,
+    });
+    if (!res.ok) { console.error('[reasonPlain] upstream returned', res.status); return null; }
+    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    const text = (data.content ?? []).filter((b) => b.type === 'text' && b.text)
+      .map((b) => b.text as string).join('\n').trim();
+    return text || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
