@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node ./dist/src/index.js",
     "typecheck": "tsc --noEmit",
-    "config:fingerprint": "ts-node ./scripts/fingerprint.ts"
+    "config:fingerprint": "ts-node ./scripts/fingerprint.ts",
+    "diag": "ts-node ./scripts/diagnose.ts"
   },
   "keywords": [],
   "author": "",
