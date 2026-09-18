@@ -5,6 +5,7 @@ import { ENV_CONFIG, assertConfig } from './config/env.config';
 import { getSetting, seedSettings } from './config/app.config';
 import { ensureDefaultPrompts } from './modules/prompt/defaults';
 import { setupAppRoutes } from './routes.setup';
+import { stampBoot } from './lib/files';
 
 function createApp() {
   const app = express();
@@ -51,6 +52,10 @@ async function main() {
     console.error('[prompts] could not apply defaults:', e.message,
       '- talk will store words but produce no reply');
   });
+
+  // Records this boot on the files volume, so /health can later show that the
+  // storage predates the running container. Never throws.
+  await stampBoot();
 
   const server = http.createServer(createApp());
   server.listen(ENV_CONFIG.PORT, () => {
