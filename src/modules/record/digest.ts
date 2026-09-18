@@ -199,11 +199,43 @@ export async function digestPending(userId: string, fullName: string, limit = 25
       if (!pool.length && date) {
         pool = await prisma.report.findMany({ where: { userId, collectedOn: new Date(`${date}T00:00:00Z`) } });
       }
+      // Last resort: what the document IS.
+      //
+      // His DNA wellness report carries neither a booking reference nor a
+      // collection date - only "PATIENT ID H8640139", which matches nothing.
+      // It is unmistakably a genetics report though, and he has exactly one, so
+      // that is enough. Only used when it identifies a single report; "some
+      // blood test" never is.
+      if (!pool.length && kind) {
+        const byKind = await prisma.report.findMany({ where: { userId, kind } });
+        if (byKind.length === 1) pool = byKind;
+      }
+
       // One booking can hold both a blood panel and a genetics report. What the
       // pages talk about is what separates them.
       if (pool.length > 1 && kind) {
         const narrowed = pool.filter((r) => r.kind === kind);
         if (narrowed.length) pool = narrowed;
+      }
+
+      // AMBIGUOUS MEANS STOP. Several reports match and nothing distinguishes
+      // them, so any choice is a coin toss dressed up as provenance.
+      //
+      // This is not hypothetical: his counselling summary prints booking
+      // 7916244308, the same visit as both a blood panel and a DNA report, and
+      // contains no measurements at all. Left to "pick one that has no file
+      // yet", a seven-page summary was filed as his 392-page genetics report.
+      if (pool.length > 1 && !kind) {
+        await prisma.storedFile.update({
+          where: { id: f.id },
+          data: {
+            ...{ text, pages, digestedAt: new Date(), bookingRef: ref,
+                 contentDate: date ? new Date(`${date}T00:00:00Z`) : null },
+            digestNote: `read (${pages} pages) - ${pool.length} reports share ${ref ?? date ?? 'this identifier'} and nothing in the file says which, so it is not linked`,
+          },
+        });
+        outcomes.push({ file: f.filename, result: 'read', detail: `ambiguous between ${pool.length} reports - not linked` });
+        continue;
       }
 
       const common = {
