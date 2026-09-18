@@ -30,6 +30,17 @@ export interface AppSettings {
   /** Token budget for conversation history. Anything that does not fit is
    *  compacted into a summary rather than dropped. */
   'talk.context_token_budget': number;
+  /** What the app says about itself while someone waits, and when.
+   *
+   *  Three bouncing dots say "something is happening" and nothing else. A word
+   *  says what, and after twelve seconds of silence the difference between
+   *  "still reading your record" and "this has hung" is the whole experience.
+   *
+   *  Here rather than in the frontend because the words are product, not
+   *  layout: changing "thinking" to something better should not need a build.
+   *  `at` is milliseconds since the message was sent; the last one to come due
+   *  is the one shown. */
+  'talk.status_labels': { at: number; label: string }[];
 }
 
 const DEFAULTS: AppSettings = {
@@ -40,6 +51,15 @@ const DEFAULTS: AppSettings = {
   'talk.max_message_chars': 8000,
   'talk.context_exchanges': 200,
   'talk.context_token_budget': 24000,
+  'talk.status_labels': [
+    { at: 0, label: 'thinking' },
+    { at: 3000, label: 'reading your record' },
+    { at: 7000, label: 'putting it together' },
+    // Past this point the honest thing is to admit it is slow rather than keep
+    // claiming to work. Silence is what makes someone close the app.
+    { at: 14000, label: 'still here, taking longer than usual' },
+    { at: 30000, label: 'this one is being stubborn, hang on' },
+  ],
 };
 
 const TTL_MS = 30_000;

@@ -14,7 +14,8 @@
     "import:record": "ts-node ./scripts/import-record.ts",
     "canonicalise": "ts-node scripts/canonicalise.ts",
     "migrate:rest": "ts-node scripts/migrate-rest.ts",
-    "upload:record": "ts-node scripts/upload-record.ts"
+    "upload:record": "ts-node scripts/upload-record.ts",
+    "docs:check": "ts-node scripts/docs-check.ts"
   },
   "keywords": [],
   "author": "",

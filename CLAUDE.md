@@ -283,3 +283,19 @@ The target is already pinned to backend by the cwd — skip the parent-level "ba
 - **Do NOT edit `<root>/deployment/CLAUDE.md` or `<root>/deployment/.claude/rules/**`.** Those files describe HOW to deploy in general — they're authored at parent level. If you find a deployment rule is wrong or incomplete, surface it as a `### TODO for parent-level session` block instead of editing.
 - **Do NOT touch frontend deployment artifacts.** If the deployment plan involves the frontend, escalate via TODO; do not reach into `<root>/frontend/**`.
 - **Do NOT SSH into the user's server on their behalf.** Per `server-provisioning-guide.md` and `reverse-proxy-guide.md`, Claude prints commands and walks the user through them.
+
+## The API docs are part of the change
+
+`docs/API.md` and `docs/openapi.yaml` describe this service. A change that adds,
+removes or alters an endpoint, a field, a status code or an error and does not
+touch them is not finished.
+
+    npm run docs:check
+
+prints the routes registered in code against the paths described in the spec and
+names the difference. Run it after touching a route.
+
+This is not tidiness. Before these files existed, `urls.ts` in the frontend
+carried a comment saying "the backend publishes an OpenAPI spec" and no spec
+existed at all, which is worse than saying nothing: it sends the next person to
+read something that is not there.

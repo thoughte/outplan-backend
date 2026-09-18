@@ -14,6 +14,7 @@ import { authSessionController } from './modules/auth-session/controller';
 import { talkController } from './modules/talk/controller';
 import { fileController, upload } from './modules/file/controller';
 import { agentKeyController } from './modules/agent-key/controller';
+import { appConfigController } from './modules/app-config/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -67,6 +68,11 @@ export function setupAppRoutes(app: Express): void {
   });
 
   // --- public -------------------------------------------------------------
+  // The handful of settings a browser needs before anyone has signed in. An
+  // allowlist inside the controller decides what that means; this table also
+  // holds CORS origins and the model name.
+  app.get(API_PREFIX + ALL_ROUTES.clientConfig, appConfigController.client);
+
   // None. Sign-in and sign-up happen in the browser against Firebase; the
   // backend only ever verifies the resulting token.
 

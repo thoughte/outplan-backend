@@ -26,6 +26,9 @@ export interface ExchangeResponse {
   saidAt: string;
   localDay: string;
   parsed: unknown;
+  /** Set when this message was answered as part of a later reply, because
+   *  several arrived before any answer came back. Not unanswered. */
+  coveredById: string | null;
   replied: string | null;
   /** { messages: string[], question?: { text, options[] } } - how to SHOW it. */
   replyParts: unknown;
@@ -44,6 +47,7 @@ export function toExchangeResponse(
     saidAt: e.saidAt.toISOString(),
     localDay: e.localDay,
     parsed: e.parsed,
+    coveredById: e.coveredById,
     replied: e.replied,
     replyParts: e.replyParts,
     repliedAt: e.repliedAt ? e.repliedAt.toISOString() : null,

@@ -19,6 +19,30 @@ export const talkRepo = {
       data: { ...data, replyParts: data.replyParts as never, repliedAt: new Date() },
     }),
 
+  /** Messages this person sent that never got an answer.
+   *
+   *  Recent ones only. Something sent an hour ago and never answered is not
+   *  part of what they are saying now; it is a failure worth finding on its
+   *  own rather than quietly folding into the next reply.
+   */
+  unanswered: (userId: string, excludeId: string, withinMs: number, limit: number) =>
+    prisma.exchange.findMany({
+      where: {
+        userId,
+        id: { not: excludeId },
+        repliedAt: null,
+        coveredById: null,
+        saidAt: { gte: new Date(Date.now() - withinMs) },
+      },
+      orderBy: { saidAt: 'asc' },
+      take: limit,
+      select: { id: true, said: true },
+    }),
+
+  /** Point earlier messages at the reply that answered them. */
+  markCovered: (ids: string[], coveredById: string) =>
+    prisma.exchange.updateMany({ where: { id: { in: ids } }, data: { coveredById } }),
+
   attachParse: (id: string, parsed: unknown): Promise<Exchange> =>
     prisma.exchange.update({ where: { id }, data: { parsed: parsed as never } }),
 

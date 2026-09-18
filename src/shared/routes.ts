@@ -5,6 +5,10 @@ export const ALL_ROUTES = {
 
   me: '/me',
 
+  /// Settings a browser may know. Served BEFORE the auth boundary: the app
+  /// needs them on the sign-in screen, before anyone has signed in.
+  clientConfig: '/config',
+
   sessions: {
     base: '/sessions',
     one: '/sessions/:id',

@@ -142,6 +142,18 @@ model Exchange {
   corrections Correction[]
 
   @@index([userId, localDay])
+  /// When several messages arrive before any answer, one reply covers them all
+  /// and the earlier ones point at it.
+  ///
+  /// Someone types "I had momos", then "with red chutney", then "post dinner"
+  /// in three taps. Answering each separately is three replies to one thought.
+  /// Answering only the last leaves the first two sitting there with nothing
+  /// under them, which looks exactly like being ignored - and that is what
+  /// happened before this existed.
+  coveredById String?    @map("covered_by_id") @db.Uuid
+  coveredBy   Exchange?  @relation("covers", fields: [coveredById], references: [id], onDelete: SetNull)
+  covers      Exchange[] @relation("covers")
+
   observations Observation[]
 
   @@map("exchanges")

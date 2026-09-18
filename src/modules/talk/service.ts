@@ -40,6 +40,19 @@ export const talkService: TalkService = {
       localDay: localDay(new Date(), user.timezone),
     });
 
+    // Anything they sent that never got an answer.
+    //
+    // Three taps of "I had momos" / "with red chutney" / "post dinner" is one
+    // thought, and the first two used to sit there with nothing underneath -
+    // indistinguishable from being ignored. They are answered together now, and
+    // the reply is attached to this message with the earlier ones pointing at
+    // it.
+    //
+    // Bounded by time as well as count: something sent an hour ago and never
+    // answered is not part of what they are saying now, it is a failure to go
+    // and look at separately.
+    const orphans = await talkRepo.unanswered(userId, exchange.id, 15 * 60_000, 5);
+
     const prompt = await promptRepo.active(TALK_PROMPT_KEY).catch(() => null);
     if (prompt) {
       // The record goes in the SYSTEM prompt, not the conversation. In the
@@ -58,11 +71,19 @@ export const talkService: TalkService = {
         summary ? `---\n\nEARLIER IN THIS CONVERSATION, condensed:\n\n${summary}` : null,
       ].filter(Boolean).join('\n\n');
 
+      // The unanswered ones and this one go in as ONE user turn. Consecutive
+      // user turns are not a conversation, and sending them separately asks the
+      // model to reply to the last line while the earlier ones scroll past.
+      const saidNow = [...orphans.map((o) => o.said), input.said].join('\n');
+
       const result = await reason(system, [
         ...turns,
-        { role: 'user' as const, content: input.said },
+        { role: 'user' as const, content: saidNow },
       ]);
       if (result) {
+        // Mark the earlier messages as covered BEFORE the reply lands, so there
+        // is no moment where they are answered and still look abandoned.
+        if (orphans.length) await talkRepo.markCovered(orphans.map((o) => o.id), exchange.id);
         await talkRepo.attachReply(exchange.id, {
           replied: result.text,
           replyParts: result.parts,

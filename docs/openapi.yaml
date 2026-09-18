@@ -1,0 +1,386 @@
+openapi: 3.1.0
+info:
+  title: outplan API
+  version: "1.0.0"
+  description: |
+    Hand-written and kept in step with the code by hand. A change to an endpoint,
+    a field, a status code or an error is not finished until this file says so.
+
+    Everything under /api/v1 needs an Authorization header. Everything except
+    POST /sessions also needs x-session-id, unless the credential is an agent key,
+    which is itself the session.
+servers:
+  - url: https://api.outplan.org
+
+tags:
+  - name: public
+  - name: sessions
+  - name: talk
+  - name: files
+  - name: agent keys
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: A Firebase ID token, or an agent key beginning `oak_`.
+    session:
+      type: apiKey
+      in: header
+      name: x-session-id
+      description: The device session. Omitted when the bearer is an agent key.
+  schemas:
+    Error:
+      type: object
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: BAD_REQUEST }
+            message: { type: string, description: Written to be shown to a person. }
+            detail:
+              type: object
+              description: On validation failures, `fields` says which field and why.
+    ReplyParts:
+      type: object
+      properties:
+        messages:
+          type: array
+          maxItems: 3
+          items: { type: string }
+          description: One to three bubbles, the way someone types on a phone.
+        question:
+          type: object
+          description: Dropped entirely if it has fewer than two options; one option is not a choice.
+          properties:
+            text: { type: string }
+            options: { type: array, minItems: 2, maxItems: 4, items: { type: string } }
+    Exchange:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        said: { type: string }
+        replied: { type: string, nullable: true }
+        replyParts: { $ref: '#/components/schemas/ReplyParts' }
+        coveredById:
+          type: string
+          format: uuid
+          nullable: true
+          description: >
+            Set when this message was answered as part of a later reply, because
+            several arrived before any answer. Not unanswered; answered together.
+        saidAt: { type: string, format: date-time }
+        repliedAt: { type: string, format: date-time, nullable: true }
+        localDay: { type: string, example: "2026-09-18" }
+        corrections: { type: array, items: { type: object } }
+    StoredFile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        mediaType: { type: string }
+        bytes: { type: integer }
+        kind: { type: string, enum: [report, plan, scan, note, other] }
+        status: { type: string, enum: [current, superseded, draft] }
+        contentDate:
+          type: string
+          format: date
+          nullable: true
+          description: The date the CONTENT is about, not when it was uploaded.
+        pages: { type: integer, nullable: true }
+        bookingRef: { type: string, nullable: true }
+        digestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null means stored but not yet read, so nothing from it is in the record.
+        digestNote: { type: string, nullable: true }
+        hash: { type: string }
+    AgentKey:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        scopes: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+
+security:
+  - bearer: []
+    session: []
+
+paths:
+  /health:
+    get:
+      tags: [public]
+      security: []
+      summary: Whether this process can do its job
+      description: >
+        `ok` means "can serve", not "every variable is set". Secrets appear as
+        fingerprints, never values. `files.ephemeral` true means writes vanish at
+        the next deploy.
+      responses:
+        '200': { description: Serving }
+        '503': { description: Cannot serve }
+
+  /api/v1/config:
+    get:
+      tags: [public]
+      security: []
+      summary: Client-safe settings
+      description: An allowlist. The same table holds CORS origins and the model name.
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      talk.status_labels:
+                        type: array
+                        description: What to say while someone waits, and when. `at` is ms since sending.
+                        items:
+                          type: object
+                          properties:
+                            at: { type: integer }
+                            label: { type: string }
+                      talk.max_message_chars: { type: integer }
+
+  /api/v1/sessions:
+    post:
+      tags: [sessions]
+      security: [{ bearer: [] }]
+      summary: Register this device
+      description: The one call that cannot require a session, because it creates one.
+      responses:
+        '201': { description: Created }
+    get:
+      tags: [sessions]
+      summary: Devices signed in
+      responses: { '200': { description: List } }
+    delete:
+      tags: [sessions]
+      summary: Sign out everywhere
+      parameters:
+        - { name: keep, in: query, schema: { type: string, enum: [current] } }
+      responses: { '204': { description: Done } }
+
+  /api/v1/sessions/{id}:
+    delete:
+      tags: [sessions]
+      summary: Sign out one device
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '204': { description: Done } }
+
+  /api/v1/talk:
+    post:
+      tags: [talk]
+      summary: Say something
+      description: >
+        Messages sent before any answer are answered together: the reply attaches
+        to the newest and the earlier ones carry coveredById. The message is
+        stored before reasoning is attempted, so a model outage never costs it.
+        Refused for agent keys.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [said]
+              properties: { said: { type: string, minLength: 1, maxLength: 8000 } }
+      responses:
+        '201':
+          description: Stored, with a reply when one could be produced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data: { $ref: '#/components/schemas/Exchange' }
+        '403':
+          description: An agent key cannot be used for conversation
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    get:
+      tags: [talk]
+      summary: History
+      parameters:
+        - { name: day, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses: { '200': { description: List } }
+
+  /api/v1/talk/export:
+    get:
+      tags: [talk]
+      summary: Everything, for taking away
+      responses: { '200': { description: Every exchange } }
+
+  /api/v1/talk/{id}:
+    get:
+      tags: [talk]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: One exchange } }
+
+  /api/v1/talk/{id}/correct:
+    post:
+      tags: [talk]
+      summary: Say it got something wrong
+      description: Not an edit. Both versions stay, and the correction is replayed into later context.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wasWrong]
+              properties:
+                wasWrong: { type: string, maxLength: 4000 }
+                isRight: { type: string, maxLength: 4000 }
+                domain: { type: string, maxLength: 80 }
+      responses: { '201': { description: Recorded } }
+
+  /api/v1/files:
+    post:
+      tags: [files]
+      summary: Upload a report, scan or document
+      description: >
+        Do not set content-type; the browser writes the multipart boundary. Omit
+        optional fields rather than sending them empty - FormData turns undefined
+        into the string "undefined". 25 MB ceiling. The path on disk comes from
+        the SHA-256, never the filename.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                kind: { type: string, enum: [report, plan, scan, note, other] }
+                status: { type: string, enum: [current, superseded, draft] }
+                contentDate: { type: string, format: date }
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  duplicate: { type: boolean, enum: [false] }
+                  data: { $ref: '#/components/schemas/StoredFile' }
+        '200':
+          description: >
+            The same bytes were already here. Nothing was created; a report is
+            digested exactly once.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  duplicate: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/StoredFile' }
+    get:
+      tags: [files]
+      summary: Everything stored
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/StoredFile' } }
+
+  /api/v1/files/read-pending:
+    post:
+      tags: [files]
+      summary: Read anything uploaded but not yet read
+      description: >
+        Registered before /files/{id} or Express reads "read-pending" as an id.
+        Answers with what happened per file rather than a count.
+      responses: { '200': { description: One outcome per file } }
+
+  /api/v1/files/{id}/content:
+    get:
+      tags: [files]
+      summary: The original bytes
+      description: >
+        Requires the auth headers, so a plain link cannot reach it. Fetch it and
+        hand the blob to a viewer.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: The file }
+        '404': { description: No such file, or its contents are missing from storage }
+
+  /api/v1/agent-keys:
+    get:
+      tags: [agent keys]
+      summary: What has access to this record
+      responses:
+        '200':
+          description: Every key, live or withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/AgentKey' } }
+    post:
+      tags: [agent keys]
+      summary: Grant access
+      description: >
+        Returns data.secret ONCE. Stored as a hash and never retrievable; lose it
+        and issue another. Refused for an agent-key caller - a key that can mint
+        keys makes revoking one meaningless.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string, maxLength: 60 }
+                days: { type: integer, minimum: 1, maximum: 365, default: 30 }
+      responses:
+        '201': { description: Created, with the secret }
+        '400': { description: Too many live keys }
+        '403': { description: Only a person may create a key }
+
+  /api/v1/agent-keys/{id}:
+    delete:
+      tags: [agent keys]
+      summary: End a key
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Ended }
+        '403': { description: Only a person may revoke a key }
+        '404': { description: No such key }
+
+  /api/v1/me:
+    get:
+      tags: [public]
+      summary: Who this credential belongs to
+      responses: { '200': { description: Account } }
+    patch:
+      tags: [public]
+      summary: Change timezone
+      responses: { '200': { description: Updated } }
