@@ -47,6 +47,7 @@ model User {
 
   reports       Report[]
   files         StoredFile[]
+  agentKeys     AgentKey[]
   measurements  Measurement[]
   symptoms      Symptom[]
   interventions Intervention[]
@@ -521,4 +522,52 @@ model VariableCatalog {
 
   @@index([category])
   @@map("variable_catalog")
+}
+
+/// A key that lets something which is not a person act as this person.
+///
+/// Kunal's objection, 18 Sep 2026, and it is a fair one: I kept his entire
+/// health record for months, then built an app I have no access to. The agent
+/// doing the work cannot reach the record it maintains.
+///
+/// So this exists - but as a KEY, never as a backdoor, and the difference is
+/// the whole point. A backdoor is a path around authentication: invisible,
+/// unrevocable, indistinguishable from a break-in, and in a product that will
+/// hold other people's blood tests it is the single worst thing that could be
+/// built. A key is a credential like any other. It is listed beside his phones,
+/// it says when it was last used, one tap ends it, and every request it makes is
+/// attributable to it rather than blending in with his own.
+///
+/// The secret is stored as a hash. A database that leaks must not hand over
+/// working access to a health record, and nobody - including me - can read back
+/// a key that was issued.
+model AgentKey {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// What this key is for, in his words. Shown wherever it is listed, because
+  /// "revoke this" is only a real choice if he can tell which one it is.
+  label String
+
+  /// SHA-256 of the secret. The secret itself is shown once, at creation, and
+  /// never exists anywhere again.
+  tokenHash String @unique @map("token_hash")
+
+  /// What it may do. Deliberately narrow: this key exists to move records in,
+  /// not to speak as him. Nothing here grants the talk endpoints, so a leaked
+  /// key cannot put words in his conversation or read it back.
+  scopes String[] @default(["files:read", "files:write", "record:read"])
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  /// Set rather than deleted: a key that was used and then withdrawn is part of
+  /// the history of who touched this record.
+  revokedAt  DateTime? @map("revoked_at")
+  /// Belt and braces. A key that outlives its purpose is a key nobody remembers
+  /// issuing.
+  expiresAt  DateTime? @map("expires_at")
+
+  @@index([userId, revokedAt])
+  @@map("agent_keys")
 }

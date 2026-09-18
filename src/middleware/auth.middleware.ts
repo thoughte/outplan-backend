@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import type { NextFunction, Response } from 'express';
 import { firebaseAuth } from '../config/firebase.config';
 import { unauthorized, forbidden } from '../errors/app.errors';
 import { userRepo } from '../modules/user/repo';
 import { authSessionRepo } from '../modules/auth-session/repo';
+import { agentKeyRepo } from '../modules/agent-key/repo';
+import { AGENT_PREFIX } from '../modules/agent-key/types';
 import { BEARER_PREFIX } from '../shared/constants';
 import { HttpHeader } from '../shared/enums';
 import type { AuthenticatedRequest } from '../shared/types';
@@ -29,6 +32,28 @@ export async function authMiddleware(
     }
     const token = header.slice(BEARER_PREFIX.length).trim();
     if (!token) throw unauthorized('Sign in to continue');
+
+    // An agent key, if that is what arrived.
+    //
+    // This is an ADDITIONAL credential, never a way around the one below. It
+    // does not weaken Firebase verification, it cannot be produced by guessing
+    // at a signature, and it is recognised only by its own prefix - so a
+    // malformed or expired Firebase token can never accidentally be read as one.
+    //
+    // Everything about it is visible and reversible: it is listed with his
+    // devices, it records every use, and revoking it is a single row. That is
+    // the difference between a key and a backdoor, and it is the only version of
+    // this worth building in something that will hold other people's blood
+    // tests.
+    if (token.startsWith(AGENT_PREFIX)) {
+      const agent = await agentKeyRepo.findLive(createHash('sha256').update(token).digest('hex'));
+      if (!agent) throw unauthorized('That key is not valid, or it has been revoked');
+      req.user = { id: agent.user.id, email: agent.user.email, role: agent.user.role };
+      req.agentKey = { id: agent.id, label: agent.label, scopes: agent.scopes };
+      void agentKeyRepo.touch(agent.id);
+      next();
+      return;
+    }
 
     // Local signature check against cached Google keys. No network per request.
     const decoded = await firebaseAuth().verifyIdToken(token).catch(() => {
@@ -72,6 +97,10 @@ export async function requireSession(
   try {
     if (!req.user) throw unauthorized();
 
+    // An agent key IS the session. There is no phone to register and nothing to
+    // sign out of - revoking the key is the equivalent, and it is one row.
+    if (req.agentKey) { next(); return; }
+
     const id = req.headers[HttpHeader.SessionId];
     if (typeof id !== 'string' || !id) {
       throw unauthorized('This device is not registered. Sign in again.');
@@ -105,4 +134,24 @@ export function requireRole(...roles: Array<'member' | 'clinician' | 'admin'>) {
     }
     next();
   };
+}
+
+/** Refuse an agent key on routes that are the person speaking.
+ *
+ *  The key's scopes say it may move records, not talk. Writing that in a column
+ *  and never checking it is worse than not writing it at all - it reads as a
+ *  guarantee while being decoration.
+ *
+ *  What this protects is specific: an agent key must not be able to put words
+ *  into his conversation, and must not be able to read a conversation back. The
+ *  record is data he asked to be maintained; the talking is him.
+ */
+export function peopleOnly(
+  req: AuthenticatedRequest, _res: Response, next: NextFunction,
+): void {
+  if (req.agentKey) {
+    next(forbidden('An agent key cannot be used for conversation - only for records'));
+    return;
+  }
+  next();
 }

@@ -18,4 +18,10 @@ export interface AuthenticatedRequest extends Request {
   /** The live session this request belongs to. Present on every route except
    *  the one that creates a session. */
   sessionId?: string;
+  /** Present when the caller is an agent key rather than a signed-in person.
+   *
+   *  Anything that should behave differently for a non-human caller reads this
+   *  - and it is what makes an agent's actions attributable to the key that
+   *  made them rather than indistinguishable from his own. */
+  agentKey?: { id: string; label: string; scopes: string[] };
 }

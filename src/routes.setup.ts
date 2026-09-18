@@ -7,12 +7,13 @@ import { volumeHealth } from './lib/files';
 import { ENV_CONFIG } from './config/env.config';
 import { fingerprint } from './config/fingerprint';
 import { getSetting } from './config/app.config';
-import { authMiddleware, requireSession } from './middleware/auth.middleware';
+import { authMiddleware, requireSession, peopleOnly } from './middleware/auth.middleware';
 import { notFoundMiddleware, errorMiddleware } from './middleware/error.middleware';
 import { userController } from './modules/user/controller';
 import { authSessionController } from './modules/auth-session/controller';
 import { talkController } from './modules/talk/controller';
 import { fileController, upload } from './modules/file/controller';
+import { agentKeyController } from './modules/agent-key/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -102,6 +103,14 @@ export function setupAppRoutes(app: Express): void {
 
   // /talk/export before /talk/:id - Express matches in registration order, and
   // the other way round "export" is read as an id and the route is dead.
+  app.get(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.list);
+  app.post(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.create);
+  app.delete(API_PREFIX + ALL_ROUTES.agentKeys.one, agentKeyController.revoke);
+
+  // Conversation is the person, not the agent. An agent key carries no scope
+  // for it, and this is where that is actually enforced rather than merely
+  // recorded in a column.
+  app.use(API_PREFIX + '/talk', peopleOnly);
   app.get(API_PREFIX + ALL_ROUTES.talk.export, talkController.exportAll);
   app.post(API_PREFIX + ALL_ROUTES.talk.base, talkController.say);
   app.get(API_PREFIX + ALL_ROUTES.talk.base, talkController.list);

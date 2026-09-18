@@ -17,6 +17,11 @@ export const ALL_ROUTES = {
     content: '/files/:id/content',
   },
 
+  agentKeys: {
+    base: '/agent-keys',
+    one: '/agent-keys/:id',
+  },
+
   talk: {
     base: '/talk',
     // NOTE: /talk/export must be registered BEFORE /talk/:id, or Express matches

@@ -13,7 +13,8 @@
     "transcript": "ts-node ./scripts/transcript.ts",
     "import:record": "ts-node ./scripts/import-record.ts",
     "canonicalise": "ts-node scripts/canonicalise.ts",
-    "migrate:rest": "ts-node scripts/migrate-rest.ts"
+    "migrate:rest": "ts-node scripts/migrate-rest.ts",
+    "upload:record": "ts-node scripts/upload-record.ts"
   },
   "keywords": [],
   "author": "",
