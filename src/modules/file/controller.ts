@@ -4,6 +4,7 @@ import { HttpStatusCode } from '../../shared/enums';
 import { unauthorized, badRequest } from '../../errors/app.errors';
 import type { AuthenticatedRequest } from '../../shared/types';
 import { fileService } from './service';
+import { digestPending } from '../record/digest';
 import { uploadSchema, resolveType } from './types';
 
 /** Held in memory, not streamed to a temp file.
@@ -26,6 +27,27 @@ export const upload = multer({
   },
 });
 
+/** Whose name a report must carry to be linked to their record.
+ *
+ *  Only his account has a record worth protecting, and the identity check needs
+ *  a name to check against. Anything else is stored and left alone rather than
+ *  matched against a name we do not have - guessing a person's name from their
+ *  email address and then deciding whose blood test this is would be a very bad
+ *  way to be wrong.
+ */
+const NAMES: Record<string, string> = { 'ekunalkhanna@gmail.com': 'Kunal Khanna' };
+
+async function readSoon(userId: string, email: string): Promise<void> {
+  const name = NAMES[email];
+  if (!name) return;
+  try {
+    const results = await digestPending(userId, name, 5);
+    for (const r of results) console.log(`[digest] ${r.result.padEnd(24)} ${r.file}${r.detail ? ' - ' + r.detail : ''}`);
+  } catch (e) {
+    console.error('[digest] after upload:', (e as Error).message, '- the file is stored; the next boot will read it');
+  }
+}
+
 export const fileController = {
   async upload(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
@@ -38,6 +60,19 @@ export const fileController = {
       // implying a second copy now exists.
       res.status(duplicate ? HttpStatusCode.Ok : HttpStatusCode.Created)
         .json({ ok: true, duplicate, data: stored });
+
+      // Read it AFTER answering, not before.
+      //
+      // Reading a 43-page scan takes a second or two, and he uploads from a
+      // phone - holding the response open for that turns a working upload into
+      // something that looks stalled, and on a bad connection into something
+      // that times out and gets retried. The file is safe the moment it is
+      // stored; being read is what happens next, not what the upload waits for.
+      //
+      // Deliberately fire-and-forget: a failure here must never fail an upload
+      // that has already succeeded, and the boot-time pass picks up anything
+      // left unread.
+      if (!duplicate) void readSoon(req.user.id, req.user.email);
     } catch (e) { next(e); }
   },
 
