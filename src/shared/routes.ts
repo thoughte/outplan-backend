@@ -26,6 +26,11 @@ export const ALL_ROUTES = {
     one: '/agent-keys/:id',
   },
 
+  plan: {
+    base: '/plan',
+    done: '/plan/:id/done',
+  },
+
   talk: {
     base: '/talk',
     // NOTE: /talk/export must be registered BEFORE /talk/:id, or Express matches

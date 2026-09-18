@@ -2,6 +2,7 @@ import { ENV_CONFIG } from '../../config/env.config';
 import { getSetting } from '../../config/app.config';
 import { prisma } from '../../lib/prisma';
 import { Prisma } from '../../../generated/prisma/client';
+import { markFromObservation } from '../plan/service';
 
 /** Turn what he typed into rows in his record.
  *
@@ -184,6 +185,23 @@ export async function recordFrom(
     }),
     prisma.exchange.update({ where: { id: exchangeId }, data: { parsed: found as never } }),
   ]);
+
+  // Then tick off anything on today's plan that he just said he did.
+  //
+  // AFTER the observations are written, never instead of them. What he said is
+  // the record; the plan is a view of it. If the matching gets something wrong
+  // the observation is still right, and the tick can be undone.
+  //
+  // Nothing planned counts: "I will take my magnesium at 8" has not happened.
+  const written = await prisma.observation.findMany({
+    where: { exchangeId }, select: { id: true, variable: true, value: true, planned: true },
+  });
+  for (const o of written) {
+    if (o.planned) continue;
+    await markFromObservation(userId, localDay, o.id, o.variable, o.value)
+      .then((n) => { if (n) console.log(`[plan] ticked ${n} from "${o.value.slice(0, 40)}"`); })
+      .catch((err: Error) => console.error('[plan] could not tick:', err.message));
+  }
 
   return found.length;
 }

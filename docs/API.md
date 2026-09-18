@@ -90,6 +90,34 @@ device asking.
 
 ---
 
+## Plan
+
+### `GET /api/v1/plan?day=YYYY-MM-DD`
+Today's list, built from the record rather than kept beside it.
+
+Generated from open interventions whose schedule is actually daily. As-needed,
+SOS, irregular and uncertain ones are left off, because a list containing things
+you are not meant to do every day is a list you stop reading.
+
+Idempotent. Asking again adds what is new and never clears what has been ticked.
+
+`atLocal` is null for "with breakfast": that is a time of day, not a time, and
+inventing 08:00 puts a deadline on something that never had one.
+
+### `POST /api/v1/plan/:id/done`
+Body `{ "done": true | false }`.
+
+**Items are also ticked by saying so.** "took my morning meds" in `/talk` marks
+every morning item; "magnesium liya" marks that one; "had 2 rotis" marks nothing.
+Those arrive with `doneVia: "said"` and carry the observation that proved it.
+Unticking clears both, so nothing is left claiming to have been matched.
+
+Matching is deliberately conservative. An unticked box is a tap; a box ticked for
+a tablet never taken is the record saying he is adherent when he is not, and that
+is the number everything else turns on.
+
+---
+
 ## Talk
 
 **Agent keys are refused here** (`403`). Records are data he asked to be kept;

@@ -15,6 +15,7 @@ servers:
 tags:
   - name: public
   - name: sessions
+  - name: plan
   - name: talk
   - name: files
   - name: agent keys
@@ -75,6 +76,32 @@ components:
         repliedAt: { type: string, format: date-time, nullable: true }
         localDay: { type: string, example: "2026-09-18" }
         corrections: { type: array, items: { type: object } }
+    PlanItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        localDay: { type: string, example: "2026-09-18" }
+        key: { type: string, description: Stable per source per day, e.g. "intervention:<uuid>". }
+        title: { type: string }
+        detail: { type: string, nullable: true }
+        atLocal:
+          type: string
+          nullable: true
+          example: "20:00"
+          description: >
+            Null for "with breakfast", which is a time of day rather than a time.
+        sortOrder: { type: integer, description: Minutes into the day. Morning before evening. }
+        source: { type: string, enum: [intervention, manual] }
+        status: { type: string, enum: [pending, done, skipped] }
+        doneAt: { type: string, format: date-time, nullable: true }
+        doneVia:
+          type: string
+          enum: [tap, said]
+          nullable: true
+          description: >
+            Tapped, or said out loud and matched. Kept apart because "I ticked
+            this" and "the app decided I meant this" are different certainties.
+
     StoredFile:
       type: object
       properties:
@@ -180,6 +207,54 @@ paths:
       summary: Sign out one device
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '204': { description: Done } }
+
+  /api/v1/plan:
+    get:
+      tags: [plan]
+      summary: What to do today, and what is done
+      description: >
+        Generated from open interventions whose schedule is actually daily.
+        As-needed, SOS, irregular and uncertain ones are left off: a list that
+        includes things you are not meant to do every day is a list you stop
+        trusting. Idempotent - asking again adds what is new and never clears
+        what has been ticked.
+      parameters:
+        - { name: day, in: query, schema: { type: string, format: date },
+            description: Their local day. Omitted means today where they are. }
+      responses:
+        '200':
+          description: The day
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      day: { type: string, example: "2026-09-18" }
+                      items: { type: array, items: { $ref: '#/components/schemas/PlanItem' } }
+
+  /api/v1/plan/{id}/done:
+    post:
+      tags: [plan]
+      summary: Tick or untick
+      description: >
+        Items are also ticked by saying so. "took my morning meds" in /talk marks
+        every morning item, "magnesium liya" marks that one. Those arrive with
+        doneVia "said" and carry the observation that proved it; unticking clears
+        both.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { done: { type: boolean, default: true } }
+      responses:
+        '200': { description: The updated item }
+        '404': { description: No such thing on your plan }
 
   /api/v1/talk:
     post:

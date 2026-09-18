@@ -48,6 +48,7 @@ model User {
   reports       Report[]
   files         StoredFile[]
   agentKeys     AgentKey[]
+  planItems     PlanItem[]
   measurements  Measurement[]
   symptoms      Symptom[]
   interventions Intervention[]
@@ -390,6 +391,8 @@ model Intervention {
   notes     String?   @db.Text
 
   @@index([userId, stoppedOn])
+  planItems PlanItem[]
+
   @@map("interventions")
 }
 
@@ -431,6 +434,8 @@ model Observation {
   /// says when, which is the whole question for a meal near bedtime.
   exchangeId String?   @map("exchange_id") @db.Uuid
   exchange   Exchange? @relation(fields: [exchangeId], references: [id], onDelete: SetNull)
+
+  planItems PlanItem[]
 
   @@index([userId, localDay])
   @@index([userId, variable, localDay])
@@ -610,4 +615,75 @@ model AgentKey {
 
   @@index([userId, revokedAt])
   @@map("agent_keys")
+}
+
+/// One thing to do today.
+///
+/// The Today screen used to count messages and replay the transcript, which
+/// tells someone nothing they did not already know. What a person actually
+/// wants at 9am is the short list of what they are meant to do, and at 11pm
+/// whether they did it.
+///
+/// Items are GENERATED from the record rather than typed in: his five
+/// breakfast tablets and his 20:00 magnesium are already in `interventions`
+/// with their schedules, and a to-do list that has to be maintained separately
+/// from the record is a to-do list that will disagree with it.
+model PlanItem {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'YYYY-MM-DD' in their timezone. Text, for the same reason as Observation:
+  /// which day something belongs to must not depend on where the reader is.
+  localDay String @map("local_day") @db.VarChar(10)
+
+  /// Stable per source per day, e.g. "intervention:<uuid>". Regenerating a day
+  /// must not produce a second copy of the same tablet, and it must not wipe
+  /// out what has already been ticked.
+  key String
+
+  title  String
+  detail String?
+  /// 'HH:MM' when the record says when. Null for "with breakfast", which is a
+  /// time of day rather than a time - inventing 08:00 for it would put a
+  /// precise deadline on something that never had one.
+  atLocal String? @map("at_local") @db.VarChar(5)
+  /// Lower sorts first. Morning things before evening things.
+  sortOrder Int @default(0) @map("sort_order")
+
+  source         PlanSource
+  interventionId String?       @map("intervention_id") @db.Uuid
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+
+  status PlanStatus @default(pending)
+  doneAt DateTime?  @map("done_at")
+  /// How it was marked: he tapped it, or he said he had done it and the
+  /// observation that proved it. Worth keeping separate - "I ticked this" and
+  /// "the app decided I meant this" are different levels of certainty, and if
+  /// the matching ever goes wrong this is how it is found.
+  doneVia       DoneVia?
+  observationId String?      @map("observation_id") @db.Uuid
+  observation   Observation? @relation(fields: [observationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, localDay, key])
+  @@index([userId, localDay, sortOrder])
+  @@map("plan_items")
+}
+
+enum PlanSource {
+  intervention
+  manual
+}
+
+enum PlanStatus {
+  pending
+  done
+  skipped
+}
+
+enum DoneVia {
+  tap
+  said
 }

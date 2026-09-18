@@ -15,6 +15,7 @@ import { talkController } from './modules/talk/controller';
 import { fileController, upload } from './modules/file/controller';
 import { agentKeyController } from './modules/agent-key/controller';
 import { appConfigController } from './modules/app-config/controller';
+import { planController } from './modules/plan/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -112,6 +113,9 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.list);
   app.post(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.create);
   app.delete(API_PREFIX + ALL_ROUTES.agentKeys.one, agentKeyController.revoke);
+
+  app.get(API_PREFIX + ALL_ROUTES.plan.base, planController.today);
+  app.post(API_PREFIX + ALL_ROUTES.plan.done, planController.setDone);
 
   // Conversation is the person, not the agent. An agent key carries no scope
   // for it, and this is where that is actually enforced rather than merely
