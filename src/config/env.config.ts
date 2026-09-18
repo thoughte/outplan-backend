@@ -24,6 +24,11 @@ export const ENV_CONFIG = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
   FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT ?? '',
 
+  /** Where uploaded files are written. A mounted volume in production; a local
+   *  folder in development. Not a database setting, because the path must be
+   *  known before anything can be read back. */
+  FILES_DIR: process.env.FILES_DIR ?? './data/files',
+
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: Number(process.env.PORT ?? 4000),
 } as const;

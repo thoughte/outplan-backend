@@ -6,3 +6,6 @@ generated/
 !.env.example
 *.log
 .DS_Store
+
+# uploaded files in development; production uses the mounted volume
+data/

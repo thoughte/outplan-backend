@@ -35,6 +35,18 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/prisma.config.mjs ./prisma.config.mjs
 
+# The mount point for the files volume, created and owned by `node` BEFORE the
+# volume is attached and before we drop privileges.
+#
+# This ordering is the whole trick. The server runs as a non-root user, so it
+# cannot chown anything at boot. Docker copies the image's ownership of a
+# directory into a NAMED volume the first time that volume is mounted there - so
+# creating it here as node:node is what makes the volume writable later. Skip it
+# and the volume arrives owned by root, every write fails with EACCES, and the
+# failure shows up as a broken upload rather than as a permissions problem.
+RUN mkdir -p /data/files && chown -R node:node /data
+ENV FILES_DIR=/data/files
+
 # Run as a non-root user. The image ships one; use it.
 USER node
 

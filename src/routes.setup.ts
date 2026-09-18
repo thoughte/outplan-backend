@@ -3,6 +3,7 @@ import { API_PREFIX } from './shared/constants';
 import { ALL_ROUTES } from './shared/routes';
 import { HttpStatusCode } from './shared/enums';
 import { databaseHealth } from './lib/prisma';
+import { volumeHealth } from './lib/files';
 import { ENV_CONFIG } from './config/env.config';
 import { fingerprint } from './config/fingerprint';
 import { getSetting } from './config/app.config';
@@ -28,7 +29,7 @@ import { talkController } from './modules/talk/controller';
 export function setupAppRoutes(app: Express): void {
   // --- health -------------------------------------------------------------
   app.get(ALL_ROUTES.health, async (_req: Request, res: Response) => {
-    const db = await databaseHealth();
+    const [db, files] = await Promise.all([databaseHealth(), volumeHealth()]);
 
     // Which configuration this process actually received. Fingerprints, never
     // values - see src/config/fingerprint.ts for why this is not the first and
@@ -54,8 +55,12 @@ export function setupAppRoutes(app: Express): void {
       : (['database_url', 'firebase_service_account'] as const);
 
     const ok = db.up && db.migrated && required.every((k) => config[k].present);
+    // The files volume is REPORTED but does not gate `ok`. Nothing serving a
+    // conversation needs it, and marking the container unhealthy over storage
+    // would have the platform restarting a service that is answering fine -
+    // the same mistake as requiring an unused Anthropic key at boot.
     res.status(ok ? HttpStatusCode.Ok : HttpStatusCode.ServiceUnavailable).json({
-      ok, db, config, at: new Date().toISOString(),
+      ok, db, files, config, at: new Date().toISOString(),
     });
   });
 
