@@ -49,6 +49,7 @@ model User {
   files         StoredFile[]
   agentKeys     AgentKey[]
   planItems     PlanItem[]
+  goals         Goal[]
   measurements  Measurement[]
   symptoms      Symptom[]
   interventions Intervention[]
@@ -156,6 +157,7 @@ model Exchange {
   covers      Exchange[] @relation("covers")
 
   observations Observation[]
+  goals        Goal[]
 
   /// "what has this person said that never got an answer" runs on every
   /// incoming message, to fold back-to-back messages into one reply.
@@ -401,6 +403,7 @@ model Intervention {
 
   @@index([userId, stoppedOn])
   planItems PlanItem[]
+  goals     Goal[]
 
   @@map("interventions")
 }
@@ -697,4 +700,122 @@ enum PlanStatus {
 enum DoneVia {
   tap
   said
+}
+
+/// Something he is trying to change, broken down until each piece is small
+/// enough to actually finish.
+///
+/// His insight, 19 Sep 2026, and it is the whole design: "go meds free" is not
+/// one goal. Every medicine exists for a REASON, and to be free of it you fix
+/// the reason. His six daily tablets decompose into ApoB down, B12 up,
+/// homocysteine down, twitching gone, B6 measured, thiamine repleted. One
+/// sentence, six goals, four of them trackable today.
+///
+/// And it recurses. Any goal splits again until the leaves are atomic: a number
+/// to move, or a thing to do. Small scope helps twice over - he finishes things
+/// often enough to feel it, and "28 goals this year" is a true sentence rather
+/// than a slogan.
+model Goal {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String
+  /// Why this is a goal at all, in the record's own words. For the meds tree
+  /// this is the intervention's `reason`, which is where the decomposition came
+  /// from in the first place.
+  why   String? @db.Text
+
+  kind GoalKind
+
+  /// Decomposition: this goal is PART OF that one.
+  parentId String? @map("parent_id") @db.Uuid
+  parent   Goal?   @relation("breakdown", fields: [parentId], references: [id], onDelete: Cascade)
+  children Goal[]  @relation("breakdown")
+
+  /// Ordering: this goal cannot start until those are done. Separate from
+  /// parent/child on purpose - "thiamine repletion before any alcohol
+  /// reduction" is not a part-of relationship, it is a sequence, and collapsing
+  /// the two would make alcohol a component of thiamine, which it is not.
+  blockedBy GoalBlock[] @relation("blocked")
+  blocking  GoalBlock[] @relation("blocker")
+
+  /// What to read to know where this stands. A measurement variable for an
+  /// outcome, an observation kind for a behaviour. Null on a container, whose
+  /// progress is its children's.
+  measure String?
+
+  /// The honest starting number. Without it nothing can report progress, which
+  /// is why a goal can sit in waiting_baseline rather than pretending.
+  baselineValue Float?    @map("baseline_value")
+  baselineText  String?   @map("baseline_text")
+  baselineAt    DateTime? @map("baseline_at")
+
+  targetValue Float?        @map("target_value")
+  targetText  String?       @map("target_text")
+  direction   GoalDirection @default(down)
+
+  status     GoalStatus @default(proposed)
+  achievedAt DateTime?  @map("achieved_at")
+
+  /// Where it came from: the sentence he said, the message it was said in, and
+  /// the medicine it would free him from. Provenance for a goal, same rule as
+  /// everything else here - he should be able to ask why this is on his list.
+  intentText     String?       @map("intent_text") @db.Text
+  exchangeId     String?       @map("exchange_id") @db.Uuid
+  exchange       Exchange?     @relation(fields: [exchangeId], references: [id], onDelete: SetNull)
+  interventionId String?       @map("intervention_id") @db.Uuid
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, status])
+  @@index([userId, parentId])
+  @@map("goals")
+}
+
+/// "This one waits for that one." A table rather than a column because a goal
+/// can wait on several, and several can wait on it.
+model GoalBlock {
+  goalId    String @map("goal_id") @db.Uuid
+  goal      Goal   @relation("blocked", fields: [goalId], references: [id], onDelete: Cascade)
+  blockerId String @map("blocker_id") @db.Uuid
+  blocker   Goal   @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, blockerId])
+  @@index([blockerId])
+  @@map("goal_blocks")
+}
+
+enum GoalKind {
+  /// A number to move: ApoB down, B12 up, waist down.
+  outcome
+  /// Something done or not done, day after day: no alcohol, in bed by midnight.
+  behaviour
+  /// Holds other goals and has no measure of its own. "Go meds free" is this.
+  container
+}
+
+enum GoalDirection {
+  down
+  up
+  /// Reach a value and hold it, rather than pass it.
+  reach
+  /// Stop doing something entirely.
+  stop
+  /// Keep it where it is. Harder than it sounds, and a real goal.
+  maintain
+}
+
+enum GoalStatus {
+  /// Heard in conversation, not yet confirmed by him. Nothing is a goal until
+  /// he says it is.
+  proposed
+  /// Confirmed, but there is no honest starting number yet.
+  waiting_baseline
+  /// Waiting on another goal to finish first.
+  blocked
+  active
+  achieved
+  abandoned
 }

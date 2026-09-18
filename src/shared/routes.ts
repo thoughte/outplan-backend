@@ -26,6 +26,13 @@ export const ALL_ROUTES = {
     one: '/agent-keys/:id',
   },
 
+  goals: {
+    base: '/goals',
+    propose: '/goals/propose',
+    one: '/goals/:id',
+    confirm: '/goals/:id/confirm',
+  },
+
   plan: {
     base: '/plan',
     done: '/plan/:id/done',

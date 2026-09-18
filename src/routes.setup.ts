@@ -16,6 +16,7 @@ import { fileController, upload } from './modules/file/controller';
 import { agentKeyController } from './modules/agent-key/controller';
 import { appConfigController } from './modules/app-config/controller';
 import { planController } from './modules/plan/controller';
+import { goalController } from './modules/goal/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -113,6 +114,13 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.list);
   app.post(API_PREFIX + ALL_ROUTES.agentKeys.base, agentKeyController.create);
   app.delete(API_PREFIX + ALL_ROUTES.agentKeys.one, agentKeyController.revoke);
+
+  // /goals/propose before /goals/:id, or Express reads "propose" as an id and
+  // the route is unreachable - the same trap as /talk/export.
+  app.get(API_PREFIX + ALL_ROUTES.goals.base, goalController.list);
+  app.post(API_PREFIX + ALL_ROUTES.goals.propose, goalController.propose);
+  app.post(API_PREFIX + ALL_ROUTES.goals.confirm, goalController.confirm);
+  app.delete(API_PREFIX + ALL_ROUTES.goals.one, goalController.abandon);
 
   app.get(API_PREFIX + ALL_ROUTES.plan.base, planController.today);
   app.post(API_PREFIX + ALL_ROUTES.plan.done, planController.setDone);

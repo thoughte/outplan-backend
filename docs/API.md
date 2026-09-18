@@ -91,6 +91,52 @@ device asking.
 
 ---
 
+## Goals
+
+### `GET /api/v1/goals`
+The tree, with progress computed from the record every time. Nothing about
+progress is stored: a saved percentage drifts away from the measurements it
+claims to summarise, and then the app describes someone's health with a figure
+nothing supports.
+
+A container's progress is the plain **mean** of its children, not weighted, so a
+number on screen can always be checked by counting. Children with no reading yet
+are excluded rather than counted as zero, because a parent should not look like
+it is failing on account of a child that has not started.
+
+`standing.fraction` is `null` when progress cannot honestly be known, and that is
+shown as "waiting", never as 0%. Clamped at both ends: past the target is 100%,
+and going backwards is 0% rather than negative.
+
+### `POST /api/v1/goals/propose`
+Body `{ "intent": string, "exchangeId"?: uuid }`
+
+Breaks what he wants into pieces small enough to finish, **recursively**, until
+each leaf is one number to move or one thing to do.
+
+"Go meds free" is a container holding one goal per medicine, and each of those is
+the reason that medicine exists, which is already sitting in the intervention's
+`reason` column: ApoB down for the statin, B12 up for the Macfolate, thiamine
+repleted for the Benalgis. Six tablets, six goals, four trackable today.
+
+Everything comes back **proposed**. A model suggesting a goal is not the same as
+him wanting one.
+
+It never writes a goal that says to stop or reduce a prescribed medicine. That is
+not the app's to say, and it is not what is being asked for anyway: he is asking
+to fix the thing that made the medicine necessary.
+
+### `POST /api/v1/goals/:id/confirm`
+Body `{ "baselineValue"?: number, "baselineText"?: string }`
+
+Without a baseline an outcome goal becomes `waiting_baseline` and reports no
+progress, rather than pretending. "Lose inches" with no starting waist is a wish.
+
+### `DELETE /api/v1/goals/:id`
+Abandoned, never deleted. What he tried and stopped is part of the picture.
+
+---
+
 ## Plan
 
 ### `GET /api/v1/plan?day=YYYY-MM-DD`

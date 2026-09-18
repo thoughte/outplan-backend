@@ -15,6 +15,7 @@ servers:
 tags:
   - name: public
   - name: sessions
+  - name: goals
   - name: plan
   - name: talk
   - name: files
@@ -76,6 +77,46 @@ components:
         repliedAt: { type: string, format: date-time, nullable: true }
         localDay: { type: string, example: "2026-09-18" }
         corrections: { type: array, items: { type: object } }
+    GoalNode:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        why: { type: string, nullable: true, description: Why it is a goal, from the record's own words. }
+        kind: { type: string, enum: [outcome, behaviour, container] }
+        status:
+          type: string
+          enum: [proposed, waiting_baseline, blocked, active, achieved, abandoned]
+        direction: { type: string, enum: [down, up, reach, stop, maintain] }
+        measure: { type: string, nullable: true }
+        baselineValue: { type: number, nullable: true }
+        targetValue: { type: number, nullable: true }
+        achievedAt: { type: string, format: date-time, nullable: true }
+        blockedBy:
+          type: array
+          description: Goals that must finish first. "Thiamine repletion before any alcohol reduction".
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              achieved: { type: boolean }
+        standing:
+          type: object
+          properties:
+            fraction:
+              type: number
+              nullable: true
+              description: >
+                0 to 1, or null when it cannot honestly be known. Null shows as
+                "waiting", never as 0% - a goal with no baseline has not failed
+                to progress, it has not started. Clamped at both ends: past the
+                target is 100%, and going backwards is 0% rather than negative.
+            current: { type: number, nullable: true }
+            reached: { type: boolean }
+            summary: { type: string, example: "121.36 to 90 mg/dL, now 110 mg/dL" }
+        children: { type: array, items: { $ref: '#/components/schemas/GoalNode' } }
+
     PlanItem:
       type: object
       properties:
@@ -210,6 +251,97 @@ paths:
       summary: Sign out one device
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '204': { description: Done } }
+
+  /api/v1/goals:
+    get:
+      tags: [goals]
+      summary: The goal tree, with progress worked out from the record
+      description: >
+        Nothing about progress is stored. A saved percentage drifts away from the
+        measurements it claims to summarise, and then the app is describing
+        someone's health with a figure nothing supports. A container's progress
+        is the plain mean of its children, so a number on screen can always be
+        checked by counting.
+      responses:
+        '200':
+          description: Tree plus the scoreboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      goals: { type: array, items: { $ref: '#/components/schemas/GoalNode' } }
+                      scoreboard:
+                        type: object
+                        properties:
+                          thisMonth: { type: integer }
+                          thisYear: { type: integer }
+                          total: { type: integer }
+
+  /api/v1/goals/propose:
+    post:
+      tags: [goals]
+      summary: Break something he wants into goals small enough to finish
+      description: >
+        Recursive. "Go meds free" is a container holding one goal per medicine,
+        and each of those is the REASON that medicine exists - which is already
+        in the intervention's `reason` column. Splitting continues until each
+        leaf is one number to move or one thing to do.
+
+        Everything created is PROPOSED. A model suggesting a goal is not the same
+        as him wanting one, which is why there is a confirm step.
+
+        Grounded in the record: the model is given his open medicines with their
+        reasons and the exact marker names available. It never writes a goal that
+        says to stop or reduce a prescribed medicine.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [intent]
+              properties:
+                intent: { type: string, maxLength: 500, example: "I want to go meds free" }
+                exchangeId: { type: string, format: uuid, description: The message it came from. }
+      responses:
+        '201': { description: Proposed goals, with the whole tree }
+        '400': { description: Could not break it down }
+
+  /api/v1/goals/{id}/confirm:
+    post:
+      tags: [goals]
+      summary: Turn a proposal into a goal
+      description: >
+        A baseline may be supplied here. Without one an outcome goal becomes
+        waiting_baseline and reports no progress at all, rather than pretending -
+        "lose inches" with no starting waist is a wish, not a goal.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                baselineValue: { type: number }
+                baselineText: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: Now active }
+        '400': { description: Already set }
+
+  /api/v1/goals/{id}:
+    delete:
+      tags: [goals]
+      summary: Give up on a goal
+      description: >
+        Marked abandoned, never deleted. What he tried and stopped is part of the
+        picture, and a goal that vanishes takes the reason it existed with it.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '204': { description: Abandoned } }
 
   /api/v1/plan:
     get:
