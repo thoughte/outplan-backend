@@ -6,6 +6,7 @@ import { buildContext } from './context';
 import { TALK_PROMPT_KEY } from '../prompt/defaults';
 import { userRepo } from '../user/repo';
 import { localDay } from '../../shared/helper';
+import { recordFrom } from '../record/extract';
 import { talkRepo } from './repo';
 import {
   toExchangeResponse,
@@ -70,6 +71,19 @@ export const talkService: TalkService = {
         });
       }
     }
+
+    // Write down what the message reported, AFTER the reply is ready.
+    //
+    // Not awaited: he is sitting there waiting for an answer, and reading the
+    // message a second time would double that wait for something he never sees
+    // happen. It also must not be able to cost him the reply - or the message
+    // itself, which is the one thing this app promises to keep.
+    //
+    // Until this existed the app said "I'll log that" and logged nothing: not a
+    // single observation had ever been written from a conversation.
+    void recordFrom(exchange.id, userId, input.said, localDay(new Date(), user.timezone))
+      .then((n) => { if (n) console.log(`[extract] ${n} recorded from ${exchange.id}`); })
+      .catch((e: Error) => console.error('[extract] could not record:', e.message));
 
     return this.one(userId, exchange.id);
   },

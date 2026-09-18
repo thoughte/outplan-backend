@@ -7,6 +7,7 @@ import { ensureDefaultPrompts } from './modules/prompt/defaults';
 import { setupAppRoutes } from './routes.setup';
 import { stampBoot } from './lib/files';
 import { digestPending } from './modules/record/digest';
+import { recordPending } from './modules/record/extract';
 import { prisma } from './lib/prisma';
 
 function createApp() {
@@ -70,6 +71,24 @@ async function catchUpOnFiles(): Promise<void> {
   }
 }
 
+/** Read messages the app answered before it knew how to write anything down.
+ *
+ *  Capped per boot, oldest first. A history catches up over a few restarts
+ *  rather than one deploy spending minutes on it.
+ */
+async function catchUpOnMessages(): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({ select: { id: true, email: true } });
+    for (const u of users) {
+      const { read, recorded } = await recordPending(u.id);
+      if (read) console.log(`[extract] ${u.email}: read ${read} old messages, recorded ${recorded} observations`);
+    }
+  } catch (e) {
+    console.error('[extract] backfill could not run:', (e as Error).message,
+      '- messages stay as they are and the next boot tries again');
+  }
+}
+
 async function main() {
   assertConfig();
 
@@ -99,6 +118,7 @@ async function main() {
     // is down while it works - the exact failure that took this API off the
     // internet this morning. The health check passes first; files catch up.
     void catchUpOnFiles();
+    void catchUpOnMessages();
   });
 }
 

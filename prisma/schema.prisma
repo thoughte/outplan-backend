@@ -142,6 +142,8 @@ model Exchange {
   corrections Correction[]
 
   @@index([userId, localDay])
+  observations Observation[]
+
   @@map("exchanges")
 }
 
@@ -393,7 +395,20 @@ model Observation {
   value    String @db.Text
   notes    String? @db.Text
 
+  /// The message this was read out of, when it came from a conversation.
+  ///
+  /// Provenance, the same rule as a measurement pointing at the page it was
+  /// printed on: he must be able to ask "why does my record say I ate momos at
+  /// 2am" and be shown the sentence he typed. Null for the 78 rows imported
+  /// from the old SQLite record, which predate any message.
+  ///
+  /// It also carries the TIME for free. localDay says which day; the exchange
+  /// says when, which is the whole question for a meal near bedtime.
+  exchangeId String?   @map("exchange_id") @db.Uuid
+  exchange   Exchange? @relation(fields: [exchangeId], references: [id], onDelete: SetNull)
+
   @@index([userId, localDay])
+  @@index([userId, variable, localDay])
   @@map("observations")
 }
 
