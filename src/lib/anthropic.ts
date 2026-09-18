@@ -71,6 +71,34 @@ const REPLY_TOOL = {
   },
 };
 
+/** Text that is the model talking about its own plumbing, not to the person.
+ *
+ *  This shipped. Someone described their sleep and the reply, in full, was
+ *  "I'll use the reply tool." The model narrated its intention instead of
+ *  calling the tool, there was no tool call to read, and the fallback below
+ *  faithfully delivered that sentence as the answer.
+ *
+ *  The fallback itself is right - a model that answers in the wrong shape has
+ *  still answered, and throwing that away helps nobody. But an announcement
+ *  about a tool is not an answer in the wrong shape, it is stage direction, and
+ *  showing it to someone who just told you how they slept is worse than saying
+ *  nothing.
+ */
+const TOOL_TOKEN = /\b(reply[ _]tool|tool[ _]call|tool_use|function[ _]call)\b/i;
+const ANNOUNCING = /\b(?:i(?:'ll| will)(?: now)?|let me)\s+(?:use|call|invoke)\s+(?:the\s+)?(?:reply\s+)?(?:tool|function)\b/i;
+
+function isStageDirection(text: string): boolean {
+  const t = text.trim();
+  // "I will use a smaller dose next week" is a perfectly good answer, and an
+  // earlier version of this blocked it - matching "i will use" on its own is
+  // matching ordinary English. An actual tool noun has to be there.
+  if (TOOL_TOKEN.test(t)) return t.length < 160;
+  // "let me use the tool" without one of those tokens only counts when the
+  // whole reply is that and nothing else. Someone's physiotherapy tool is a
+  // real thing to talk about.
+  return ANNOUNCING.test(t) && t.length < 60;
+}
+
 /** Claude, on the reasoning path only.
  *
  *  Plain fetch rather than the SDK, for two reasons. ANTHROPIC_BASE_URL points
@@ -90,6 +118,31 @@ export async function reason(
 ): Promise<ReasoningResult | null> {
   if (!ENV_CONFIG.ANTHROPIC_API_KEY) return null;
   if (!(await getSetting('reasoning.enabled').catch(() => false))) return null;
+
+  // One retry, and only for a reply that came back unusable.
+  //
+  // The tool is forced, so a response with no tool call in it is the model
+  // having slipped rather than anything about this person's message - and the
+  // second attempt almost always lands. Retrying is cheaper than the failure it
+  // prevents, which is someone describing their sleep and being answered with
+  // silence, or worse, with "I'll use the reply tool."
+  //
+  // Strictly one. A model that will not produce the right shape twice will not
+  // produce it on the fifth try either, and each attempt is a real cost against
+  // a person who is waiting.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const out = await attemptReason(system, messages, opts);
+    if (out) return out;
+    if (attempt === 1) console.warn('[reason] no usable reply, trying once more');
+  }
+  return null;
+}
+
+async function attemptReason(
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  opts: { maxTokens?: number; timeoutMs?: number },
+): Promise<ReasoningResult | null> {
 
   const model = await getSetting('reasoning.model').catch(() => 'claude-opus-5');
   const ctl = new AbortController();
@@ -133,13 +186,24 @@ export async function reason(
 
     // Fall back to plain text if the tool call is missing or unusable. A model
     // that answered in the wrong shape still answered, and throwing that away
-    // would be worse than showing it as one bubble.
-    const fallback = (data.content ?? [])
+    // would be worse than showing it as one bubble - UNLESS what it wrote is
+    // stage direction about the tool rather than anything addressed to them.
+    const fallbackRaw = (data.content ?? [])
       .filter((b) => b.type === 'text' && b.text)
       .map((b) => b.text as string).join('\n').trim();
+    const fallback = isStageDirection(fallbackRaw) ? '' : fallbackRaw;
 
-    const final: ReplyParts | null = parts ?? (fallback ? { messages: [fallback] } : null);
-    if (!final) return null;
+    if (!parts && !fallback) {
+      if (fallbackRaw) {
+        console.error('[reason] discarded stage direction instead of replying:',
+          JSON.stringify(fallbackRaw.slice(0, 80)));
+      }
+      // Nothing usable came back. Signalled as a failure so the caller can try
+      // again, rather than dressed up as an answer.
+      return null;
+    }
+
+    const final: ReplyParts | null = parts ?? { messages: [fallback] };
 
     const text = final.messages.join('\n\n') +
       (final.question ? `\n\n${final.question.text}` : '');
