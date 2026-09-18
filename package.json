@@ -11,7 +11,8 @@
     "config:fingerprint": "ts-node ./scripts/fingerprint.ts",
     "diag": "ts-node ./scripts/diagnose.ts",
     "transcript": "ts-node ./scripts/transcript.ts",
-    "import:record": "ts-node ./scripts/import-record.ts"
+    "import:record": "ts-node ./scripts/import-record.ts",
+    "canonicalise": "ts-node scripts/canonicalise.ts"
   },
   "keywords": [],
   "author": "",

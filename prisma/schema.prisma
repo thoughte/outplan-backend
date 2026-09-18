@@ -46,6 +46,7 @@ model User {
   contextSummaryThrough DateTime? @map("context_summary_through")
 
   reports       Report[]
+  files         StoredFile[]
   measurements  Measurement[]
   symptoms      Symptom[]
   interventions Intervention[]
@@ -266,6 +267,8 @@ model Report {
   markers      GeneticMarker[]
 
   @@index([userId, collectedOn])
+  files StoredFile[]
+
   @@map("reports")
 }
 
@@ -294,6 +297,22 @@ model Measurement {
 
   /// Denormalised from the report so a trend query does not need the join.
   collectedOn DateTime @map("collected_on") @db.Date
+
+  /// The same number in one unit per marker, so a chart can plot a decade of
+  /// readings without every point having to be reasoned about first.
+  ///
+  /// `value` and `unit` above are never touched - they are what the lab printed
+  /// and the only way to re-check a conversion later. These two are derived.
+  /// Without them, wbc_count reported once as "4700 cumm" beside readings of
+  /// "6.8 10^3/uL" draws a 700x spike that is really the lowest point on the
+  /// chart, and free testosterone appears to fall when it rose.
+  canonicalValue Float?  @map("canonical_value")
+  canonicalUnit  String? @map("canonical_unit")
+  /// Set when the conversion was REFUSED, with the reason. A row where the
+  /// printed unit and the printed value disagree - platelets as "190000
+  /// thou/mm3" - must not be quietly rewritten into whatever makes the chart
+  /// look right. It is left unplotted and visible instead.
+  canonicalFlag  String? @map("canonical_flag")
 
   @@index([userId, variable, collectedOn])
   @@map("measurements")
@@ -377,4 +396,73 @@ model GeneticMarker {
 
   @@index([userId, trait])
   @@map("genetic_markers")
+}
+
+/// A file the person uploaded: a lab PDF, a scan, a plan, a spreadsheet.
+///
+/// The rule this model exists to enforce: a report is DIGESTED EXACTLY ONCE.
+/// Digesting writes measurements and a Report into the database, and from that
+/// moment the database is the only thing the reasoning engine reads. The file
+/// itself is kept so the person can open the original in the app - provenance
+/// and a viewer, not a second source of truth.
+///
+/// Which is why `hash` is unique per person rather than merely convenient. The
+/// same PDF mailed twice, or re-uploaded after a failed connection, must not
+/// double his measurements - and a record that silently doubles a reading is
+/// worse than one that rejects a file.
+model StoredFile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the bytes. The digest-once guarantee, and the only reliable way
+  /// to know two uploads are the same file - names and dates are not.
+  hash      String
+  filename  String
+  mediaType String  @map("media_type")
+  bytes     Int
+  /// Path on the files volume, relative to FILES_DIR. Relative so the volume can
+  /// be remounted anywhere without rewriting every row.
+  path      String
+
+  kind   FileKind
+  status FileStatus @default(current)
+
+  /// The date the CONTENT is about - when blood was drawn, when a plan was
+  /// written. NOT when the file was uploaded. A scan of a March test uploaded
+  /// today is March data, and charting it as today would be a lie.
+  contentDate DateTime? @map("content_date") @db.Date
+  uploadedAt  DateTime  @default(now()) @map("uploaded_at")
+
+  /// The text pulled out of the file, kept here because the engine reads the
+  /// database and never opens a file. For a plan this is what lets the app quote
+  /// his own words back to him.
+  text String? @db.Text
+
+  /// Digest bookkeeping. `digestedAt` null means the bytes are stored but
+  /// nothing has been read out of them yet; `digestNote` says why when that was
+  /// deliberate - no verified collection date, for instance, which under his own
+  /// rules blocks ingestion without throwing the file away.
+  digestedAt DateTime? @map("digested_at")
+  digestNote String?   @map("digest_note")
+  reportId   String?   @map("report_id") @db.Uuid
+  report     Report?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, hash])
+  @@index([userId, kind, contentDate])
+  @@map("stored_files")
+}
+
+enum FileKind {
+  report
+  plan
+  scan
+  note
+  other
+}
+
+enum FileStatus {
+  current
+  superseded
+  draft
 }
