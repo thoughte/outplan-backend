@@ -34,8 +34,9 @@ const API = process.env.API_BASE ?? 'https://api.outplan.org';
  *  obviously wrong afterwards.
  */
 const OWNER = 'ekunalkhanna@gmail.com';
-const TOKEN_FILE = '/Users/work/Claude/Health/.secrets/id_token';
-const SESSION_FILE = '/Users/work/Claude/Health/.secrets/session_id';
+/** The agent key he issued from his own settings. Written here, never printed,
+ *  and refused below if it turns out to belong to a different account. */
+const TOKEN_FILE = '/Users/work/Claude/Health/.secrets/agent_key';
 
 const TYPES: Record<string, string> = {
   '.pdf': 'application/pdf', '.md': 'text/markdown', '.txt': 'text/plain',
@@ -93,22 +94,9 @@ async function main(): Promise<void> {
       `${OWNER}, issue the key from there, and paste that one instead.`);
   }
   console.log(`key belongs to ${me.email} — correct account\n`);
-  const existing = (await readFile(SESSION_FILE, 'utf8').catch(() => '')).trim();
-
-  // Register this as a device, unless one was supplied. Every request needs both
-  // the token and a live session - that pairing is what makes "sign out that
-  // phone" possible, and a script is not exempt from it.
-  let sessionId = existing;
-  if (!sessionId) {
-    const r = await fetch(`${API}/api/v1/sessions`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ label: 'migration from laptop' }),
-    });
-    if (!r.ok) throw new Error(`could not register a session: ${r.status} ${await r.text()}`);
-    sessionId = (await r.json() as { data: { id: string } }).data.id;
-  }
-  console.log(`\nsession ${sessionId.slice(0, 8)}…\n`);
+  // An agent key needs no device session. There is no phone to register and
+  // nothing to sign out of - revoking the key is the equivalent, and the server
+  // treats the key itself as the session.
 
   let stored = 0, already = 0, failed = 0;
   for (const w of WANTED) {
@@ -126,7 +114,7 @@ async function main(): Promise<void> {
     try {
       const res = await fetch(`${API}/api/v1/files`, {
         method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'x-session-id': sessionId },
+        headers: { authorization: `Bearer ${token}` },
         body: form,
       });
       const body = await res.json().catch(() => null) as { duplicate?: boolean; error?: { message?: string } } | null;
