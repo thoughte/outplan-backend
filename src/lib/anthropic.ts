@@ -230,14 +230,48 @@ async function attemptReason(
  *  this exists: a missing array or a question with one option would otherwise
  *  reach the browser and render as an empty bubble or a single pointless button.
  */
+/** Markup that leaked into something meant to be plain text.
+ *
+ *  He asked "Tell me" and the entire reply he received was the five characters
+ *  <br>. Before that, "No comments?" came back as "<br>" followed by the real
+ *  sentence. React escapes HTML, so those rendered as literal text in the
+ *  bubble - he saw <br> on screen and typed "?" because the app appeared to
+ *  have said nothing.
+ *
+ *  ONLY known tag names are removed, never anything shaped like a tag. "BP
+ *  <120/80", "under <5 mg", "<2 hours before bed" are all things someone says
+ *  about their health, and a rule that stripped every <...> would silently eat
+ *  the number. This is the same trap as the cleaner that once reduced a line of
+ *  Hindi to a single space: remove what is definitely markup, leave everything
+ *  else alone.
+ */
+const HTML_TAG = /<\/?(?:br|p|div|span|ul|ol|li|strong|em|b|i|small|hr)\s*\/?>/gi;
+
+function stripMarkup(text: string): string {
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')   // a line break meant a line break
+    .replace(HTML_TAG, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function normalise(input: unknown): ReplyParts | null {
   if (!input || typeof input !== 'object') return null;
   const raw = input as { messages?: unknown; question?: unknown };
 
+  // Cleaned BEFORE the emptiness check, not after. "<br>" is not an empty
+  // string, so a check that runs first lets a bubble through containing nothing
+  // a person can read - which is exactly what shipped.
   const messages = Array.isArray(raw.messages)
-    ? raw.messages.filter((m): m is string => typeof m === 'string' && m.trim() !== '')
-        .map((m) => m.trim()).slice(0, 3)
+    ? raw.messages
+        .filter((m): m is string => typeof m === 'string')
+        .map(stripMarkup)
+        .filter((m) => m !== '')
+        .slice(0, 3)
     : [];
+  // Nothing left means nothing to say. Returning null sends this back for one
+  // retry instead of showing him markup and letting him wonder what happened.
   if (!messages.length) return null;
 
   let question: ReplyQuestion | undefined;
