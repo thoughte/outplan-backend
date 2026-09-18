@@ -267,6 +267,17 @@ model Report {
   markers      GeneticMarker[]
 
   @@index([userId, collectedOn])
+  /// The lab's own reference for this booking, as printed on the report. It is
+  /// what tells two blood tests collected on the SAME DAY apart - he has two
+  /// from 22 Apr 2023 - which a date alone cannot do, and it is how an uploaded
+  /// PDF is matched to the report it belongs to rather than guessed at.
+  bookingRef String? @map("booking_ref")
+
+  /// The filename this report was originally read from, back when the record
+  /// lived in SQLite. Kept even before the file itself is uploaded: it is the
+  /// only surviving evidence of where these numbers came from.
+  sourceName String? @map("source_name")
+
   /// The uploaded file this report was read out of, when there is one. Null for
   /// the eight imported from the old SQLite record before any file existed.
   sourceFileId String?     @map("source_file_id") @db.Uuid
@@ -479,4 +490,27 @@ enum FileStatus {
   current
   superseded
   draft
+}
+
+/// What each measurement name MEANS. Reference data, not anyone's record - so
+/// no user_id: the dictionary is the same for everybody and belongs to the
+/// product, not to a person.
+///
+/// It is what turns "vitamin_d_25oh" into "Vitamin D (25-OH)" on a chart axis,
+/// and what lets a lab's printed label be recognised as a marker already being
+/// tracked. Without it, the same analyte printed two ways starts two separate
+/// lines on a graph that should have been one.
+model VariableCatalog {
+  /// The canonical key, matching Measurement.variable.
+  variable    String  @id
+  displayName String? @map("display_name")
+  /// What this marker is normally reported in. A default for display, never a
+  /// reason to rewrite a value - the lab's own unit stays on the measurement.
+  defaultUnit String? @map("default_unit")
+  category    String?
+  /// Other printed names for the same analyte, as labs write them.
+  aliases     String[] @default([])
+
+  @@index([category])
+  @@map("variable_catalog")
 }

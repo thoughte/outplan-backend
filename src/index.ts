@@ -6,6 +6,8 @@ import { getSetting, seedSettings } from './config/app.config';
 import { ensureDefaultPrompts } from './modules/prompt/defaults';
 import { setupAppRoutes } from './routes.setup';
 import { stampBoot } from './lib/files';
+import { digestPending } from './modules/record/digest';
+import { prisma } from './lib/prisma';
 
 function createApp() {
   const app = express();
@@ -36,6 +38,38 @@ function createApp() {
   return app;
 }
 
+/** Read anything uploaded but not yet read.
+ *
+ *  Uploads happen from a phone, one tap, and reading a PDF takes seconds - so
+ *  it is deliberately not part of the upload request. This runs on every boot
+ *  and picks up whatever is outstanding, which also means a file that failed to
+ *  read once gets another attempt on the next deploy rather than being stuck
+ *  forever behind a transient error.
+ *
+ *  It never extracts measurements. See modules/record/digest.
+ */
+async function catchUpOnFiles(): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({
+      where: { files: { some: { digestedAt: null } } },
+      select: { id: true, email: true },
+    });
+    for (const u of users) {
+      // The name to check a report against comes from the account, and the only
+      // account with a record to protect is his. Anything else is left alone.
+      const name = u.email === 'ekunalkhanna@gmail.com' ? 'Kunal Khanna' : null;
+      if (!name) continue;
+      const results = await digestPending(u.id, name);
+      for (const r of results) {
+        console.log(`[digest] ${r.result.padEnd(24)} ${r.file}${r.detail ? ' - ' + r.detail : ''}`);
+      }
+    }
+  } catch (e) {
+    console.error('[digest] could not run:', (e as Error).message,
+      '- files stay stored and unread, and the next boot tries again');
+  }
+}
+
 async function main() {
   assertConfig();
 
@@ -60,6 +94,11 @@ async function main() {
   const server = http.createServer(createApp());
   server.listen(ENV_CONFIG.PORT, () => {
     console.log(`[outplan] listening on ${ENV_CONFIG.PORT} (${ENV_CONFIG.NODE_ENV})`);
+    // AFTER listening, never before. Reading a 43-page scan takes a second or
+    // two, and a deploy that waits for a backlog is a deploy where the service
+    // is down while it works - the exact failure that took this API off the
+    // internet this morning. The health check passes first; files catch up.
+    void catchUpOnFiles();
   });
 }
 
