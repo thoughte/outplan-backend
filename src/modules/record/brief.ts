@@ -55,7 +55,7 @@ export async function buildBrief(userId: string): Promise<string | null> {
       where: { userId, status: { in: ['active', 'improving'] } },
       orderBy: { reportedOn: 'desc' },
     }),
-    prisma.intervention.findMany({ where: { userId, stoppedOn: null }, orderBy: { kind: 'asc' } }),
+    prisma.intervention.findMany({ where: { userId }, orderBy: { kind: 'asc' } }),
     prisma.measurement.findMany({
       where: { userId, value: { not: null } },
       orderBy: { collectedOn: 'desc' },
@@ -113,12 +113,43 @@ export async function buildBrief(userId: string): Promise<string | null> {
   }
 
   // ---- what they are taking ----------------------------------------------
-  if (interventions.length) {
-    out.push('Currently taking:');
-    for (const i of interventions) {
+  //
+  // A missing stopped_on does NOT mean "still taking it". For anything imported
+  // from the old record it means nobody ever wrote down when it ended, and the
+  // two are not the same claim. Reading them as the same told the model he was
+  // on two cholesterol tablets at once and on a D2 antagonist his own plan bans,
+  // when the notes beside those rows said "might have taken briefly" and "now
+  // SOS only". He had to correct data he had already given us.
+  //
+  // So a row counts as CURRENT only with a start date and no end date. Undated
+  // at both ends is a historical note, and an as-needed schedule is its own
+  // thing - taken sometimes is not taken daily, and the difference matters for
+  // every interaction question that follows.
+  const ASNEEDED = /as needed|\bsos\b|\bprn\b|occasional/i;
+  const live = interventions.filter((i) => !i.stoppedOn);
+  const daily = live.filter((i) => i.startedOn && !ASNEEDED.test(i.schedule ?? ''));
+  const asNeeded = live.filter((i) => i.startedOn && ASNEEDED.test(i.schedule ?? ''));
+  const undated = live.filter((i) => !i.startedOn);
+
+  if (daily.length) {
+    out.push('Taking every day:');
+    for (const i of daily) {
       const since = i.startedOn ? `, since ${i.startedOn.toISOString().slice(0, 10)}` : '';
-      out.push(`  ${i.name}${i.dose ? ` — ${i.dose}` : ''}${since}`);
+      const when = i.schedule ? ` (${i.schedule})` : '';
+      out.push(`  ${i.name}${i.dose ? ` — ${i.dose}` : ''}${when}${since}`);
     }
+    out.push('');
+  }
+  if (asNeeded.length) {
+    out.push('Only when needed, not daily:');
+    for (const i of asNeeded) out.push(`  ${i.name}${i.dose ? ` — ${i.dose}` : ''}`);
+    out.push('');
+  }
+  if (undated.length) {
+    // Named but never asserted as current - the model must not tell him he is
+    // on these, and must not assume he is off them either.
+    out.push('Taken at some point, start and end unknown - do not assume either way:');
+    for (const i of undated) out.push(`  ${i.name}`);
     out.push('');
   }
 
