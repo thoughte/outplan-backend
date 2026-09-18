@@ -312,3 +312,18 @@ did not exist while the migration had created the snake_case one.
 One difference is expected and cannot be removed: the covering index on
 `measurements` uses `INCLUDE`, which Prisma cannot express. Anything else
 appearing here is drift worth fixing.
+
+## Every feature gets a plan file first
+
+`docs/features/<slug>.md`, written and agreed BEFORE any code. See
+`docs/features/README.md` for what goes in one and why.
+
+This is not documentation for its own sake. Everything expensive here has been a
+decision made silently while typing - a brief that read "no end date" as
+"currently taking", a day plan that would have listed as-needed medicines as
+daily tasks, goals reporting 0% for things that had not started. None were caught
+by review. The plan file is where that thinking is meant to happen, while it is
+still cheap to be wrong.
+
+If the build contradicts the plan, the plan was wrong: update it in the same
+commit. A plan that disagrees with the code is worse than none.
