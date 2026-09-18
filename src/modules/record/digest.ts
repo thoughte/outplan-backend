@@ -109,6 +109,18 @@ export function bookingRef(text: string): string | null {
 export function namesPerson(text: string, fullName: string): boolean {
   const flat = text.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ');
   const parts = fullName.toLowerCase().split(/\s+/).filter((p) => p.length > 2);
+
+  // AT LEAST TWO PARTS, and all of them present.
+  //
+  // One name is not an identity. "Khanna" on its own matches every report in a
+  // household that shares a surname, and this app already has two Khanna
+  // accounts - so a single-word name would quietly route one person's blood
+  // test into another's record, which is the exact failure the check exists to
+  // prevent.
+  //
+  // A person whose name really is one word is refused rather than guessed at:
+  // the file is stored and left unread, and unread is recoverable.
+  if (parts.length < 2) return false;
   return parts.every((p) => flat.includes(p));
 }
 

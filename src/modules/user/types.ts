@@ -27,7 +27,14 @@ export const updateMeSchema = z.object({
   /** As it appears on medical reports. The screen says so, because this is what
    *  every uploaded report is matched against before a number is read from it,
    *  and a nickname here silently disables that check. */
-  name: z.string().trim().min(2, 'Give the name as it appears on your reports').max(120).optional(),
+  // Two words minimum. One name is not an identity: "Khanna" matches every
+  // report in a household that shares a surname, and this app already has two
+  // Khanna accounts. Refused here rather than accepted and silently ignored by
+  // the report check, which would look like the check was working.
+  name: z.string().trim().max(120)
+    .refine((v) => v.split(/\s+/).filter((p) => p.length > 2).length >= 2,
+      'Give your full name as it appears on your reports, first and last')
+    .optional(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional(),
   city: z.string().trim().min(1).max(80).optional(),
   timezone: z.string().min(1).max(64).optional(),
