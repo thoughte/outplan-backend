@@ -41,6 +41,18 @@ export interface AppSettings {
    *  `at` is milliseconds since the message was sent; the last one to come due
    *  is the one shown. */
   'talk.status_labels': { at: number; label: string }[];
+  /** What the message box says when it is empty.
+   *
+   *  Configuration because it is the single most rewritten string in any chat
+   *  product, and because the first version of it was lifted verbatim from a
+   *  private health conversation and shipped to every browser. A string that
+   *  sensitive should be changeable in one row, by him, without a deploy and
+   *  without me.
+   *
+   *  It should invite, not itemise. "a meal, a symptom, how you slept" reads as
+   *  a form asking to be filled in; someone who wants to say their back hurts
+   *  now has to work out which of three boxes that is. */
+  'talk.placeholder': string;
 }
 
 const DEFAULTS: AppSettings = {
@@ -51,6 +63,7 @@ const DEFAULTS: AppSettings = {
   'talk.max_message_chars': 8000,
   'talk.context_exchanges': 200,
   'talk.context_token_budget': 24000,
+  'talk.placeholder': "What's going on?",
   'talk.status_labels': [
     { at: 0, label: 'thinking' },
     { at: 3000, label: 'reading your record' },

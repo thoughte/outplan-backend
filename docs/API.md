@@ -73,6 +73,7 @@ of client-safe settings; the same table holds CORS origins and the model name.
 { "ok": true, "data": {
   "talk.status_labels": [ { "at": 0, "label": "thinking" },
                           { "at": 3000, "label": "reading your record" } ],
+  "talk.placeholder": "What’s going on?",
   "talk.max_message_chars": 8000 } }
 ```
 

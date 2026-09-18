@@ -10,7 +10,7 @@ import { getSetting } from '../../config/app.config';
  *  thinking about this endpoint. Adding a setting must never be the same act as
  *  exposing it.
  */
-const PUBLIC_KEYS = ['talk.status_labels', 'talk.max_message_chars'] as const;
+const PUBLIC_KEYS = ['talk.status_labels', 'talk.placeholder', 'talk.max_message_chars'] as const;
 
 export const appConfigController = {
   async client(_req: Request, res: Response, next: NextFunction) {

@@ -180,6 +180,9 @@ paths:
                           properties:
                             at: { type: integer }
                             label: { type: string }
+                      talk.placeholder:
+                        type: string
+                        description: What the empty message box says. Config, not code.
                       talk.max_message_chars: { type: integer }
 
   /api/v1/sessions:
