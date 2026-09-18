@@ -82,7 +82,7 @@ of client-safe settings; the same table holds CORS origins and the model name.
 ## Account
 
 ### `GET /api/v1/me`
-`needsSetup` is true until name, date of birth and city are all present. Derived
+`needsSetup` is true until name and date of birth are both present. City is a column that exists and is not yet asked for: it was briefly a free-text box, which cannot be grouped or validated, and the timezone comes from the device anyway. Derived
 from the fields, never stored as a flag, because a flag outlives someone clearing
 a field and then the app is certain about something that stopped being true.
 

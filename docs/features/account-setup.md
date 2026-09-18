@@ -35,7 +35,7 @@ where it comes from.
 
 ## The working model
 
-**Three fields, asked once.** Full name, date of birth, city. Nothing else. An
+**Two fields, asked once.** Full name and date of birth. Nothing else. An
 onboarding form that asks for ten things is one people abandon, and everything
 else about them is already arriving through conversation.
 
@@ -46,11 +46,20 @@ before anything is read from it, and "Kunal" will not match a report that says
 nickname has quietly broken the check that protects their record from someone
 else's blood test.
 
-**City gives the zone; both are kept.** The browser's detected zone seeds the
-suggestion, so the common case is confirming a prefilled answer rather than
-searching. What is stored is the IANA zone for the arithmetic and the city in
-his own words for anything shown back to him. "Kanpur" is what he understands;
-`Asia/Kolkata` is what `local_day` needs.
+**The clock comes from the device. The city is not asked for yet.**
+
+The first build asked for it as free text. That was wrong and he said so:
+"kanpur", "Kanpur" and "Kanpur, UP" cannot be grouped, compared or validated, and
+the timezone was being taken from the device regardless. The field asked a
+question and then ignored the answer, which is worse than not asking.
+
+So setup asks two things, and the detected zone is SHOWN rather than requested:
+"your clock is set from this device: Asia/Kolkata", with a note that it can be
+changed in Settings. Stating it is honest; asking for a city and discarding it
+was not.
+
+The `city` column stays and stays empty. A picked city is the right long-term
+source for the clock, and it waits for something to pick from.
 
 **Existing accounts are routed to setup on next open.** The server decides:
 `GET /me` reports whether the profile is complete, and the app sends people to
@@ -75,10 +84,12 @@ Schema additions: `name`, `dateOfBirth`, `city`. Nothing else.
 
 ## Decisions
 
-**City, not browser detection alone.** Rejected: taking the browser zone
-silently, which was the previous plan. A phone reports where it is, not where
-someone lives, and a week abroad would quietly move every day boundary in the
-record. The browser still seeds the suggestion; the person confirms it.
+**Device zone, shown not asked.** Rejected twice, in both directions. Taking the
+browser zone silently is wrong because a phone says where it is, not where
+someone lives. Asking for a city as free text is worse, because the answer cannot
+be used for anything and the zone still came from the device. Showing what was
+detected is honest about which of the two is actually true, and leaves the
+question for when there is a list to pick from.
 
 **Derive completeness, do not store a flag.** Rejected: `profileCompletedAt`. A
 flag set once will outlive someone clearing a field, and then the app is certain

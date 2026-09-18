@@ -58,10 +58,15 @@ export function toUserResponse(u: User): UserResponse {
     city: u.city,
     timezone: u.timezone,
     age: ageFrom(u.dateOfBirth),
-    // The zone is deliberately NOT part of this test. Every account carries one
-    // from a column default, so requiring it would be satisfied by an
-    // assumption nobody made. The city is the thing that was actually answered.
-    needsSetup: !u.name || !u.dateOfBirth || !u.city,
+    // Name and date of birth only.
+    //
+    // City was asked for as free text and that was wrong: "kanpur", "Kanpur",
+    // "Kanpur, UP" cannot be grouped or validated, and the timezone was coming
+    // from the device anyway - so the field asked a question and then ignored
+    // the answer. Until there is a proper picker, the clock comes from the
+    // device and the column stays empty rather than holding a string nobody can
+    // use.
+    needsSetup: !u.name || !u.dateOfBirth,
     createdAt: u.createdAt.toISOString(),
   };
 }

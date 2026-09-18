@@ -590,10 +590,12 @@ paths:
       tags: [public]
       summary: Who this credential belongs to
       description: >
-        `needsSetup` is derived from name, date of birth and city being present,
-        never stored as a flag - a flag outlives someone clearing a field. The
-        app routes to setup when it is true. It is NOT enforced in the API: a bug
-        in the setup screen must not lock anyone out of their own health record.
+        `needsSetup` is derived from name and date of birth being present, never
+        stored as a flag - a flag outlives someone clearing a field. City is not
+        part of it: it was briefly asked for as free text, which cannot be
+        grouped or validated, and the clock comes from the device. The app routes
+        to setup when this is true. It is NOT enforced in the API: a bug in the
+        setup screen must not lock anyone out of their own health record.
       responses:
         '200':
           description: Account

@@ -45,10 +45,15 @@ model User {
   /// it; a birth date stays true. Most of what a marker means depends on it.
   dateOfBirth DateTime? @map("date_of_birth") @db.Date
 
-  /// Where they live, in their own words. Kept alongside the zone because
-  /// "Kanpur" is what he understands and "Asia/Kolkata" is what the arithmetic
-  /// needs, and showing him the second one back would be the app talking to
-  /// itself.
+  /// Where they live. NOT ASKED FOR YET.
+  ///
+  /// It was briefly a free-text box, which was a mistake: "kanpur", "Kanpur"
+  /// and "Kanpur, UP" cannot be grouped or checked, and the timezone was being
+  /// taken from the device regardless - so the field asked a question and then
+  /// ignored the answer.
+  ///
+  /// The column stays because a picked city is the right long-term source for
+  /// the clock. It stays empty until there is something to pick from.
   city String?
 
   /// IANA zone. Still defaulted so nothing breaks before setup runs, but the

@@ -52,3 +52,22 @@ Two specifics that follow from it, and that are easy to get wrong:
 would sit above individual ones; `PlanItem` already carries a source and a
 per-item done state; `Observation` already links back to the message it came
 from, which is how a shared meal would become per-person intake.
+
+---
+
+## A city picker
+
+Setup asks for name and date of birth, and takes the clock from the device.
+
+City was briefly a free-text box and was removed the same day: "kanpur",
+"Kanpur" and "Kanpur, UP" cannot be grouped, compared or validated, and the
+timezone was coming from the device regardless, so the field asked a question and
+discarded the answer.
+
+What it should be: pick from a list, with the device's zone preselecting the
+likely entry, storing both the chosen place and its IANA zone. Where someone
+lives is a better source for the clock than where their phone currently is, and
+it is the only version of this question worth asking.
+
+Until then the device decides, the screen says so plainly, and `users.city` stays
+null rather than holding a string nothing can use.
