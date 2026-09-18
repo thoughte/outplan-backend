@@ -15,7 +15,8 @@
     "canonicalise": "ts-node scripts/canonicalise.ts",
     "migrate:rest": "ts-node scripts/migrate-rest.ts",
     "upload:record": "ts-node scripts/upload-record.ts",
-    "docs:check": "ts-node scripts/docs-check.ts"
+    "docs:check": "ts-node scripts/docs-check.ts",
+    "db:check": "prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource prisma.config.mjs --exit-code"
   },
   "keywords": [],
   "author": "",

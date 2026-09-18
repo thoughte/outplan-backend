@@ -299,3 +299,16 @@ This is not tidiness. Before these files existed, `urls.ts` in the frontend
 carried a comment saying "the backend publishes an OpenAPI spec" and no spec
 existed at all, which is worse than saying nothing: it sends the next person to
 read something that is not there.
+
+## The schema and the database must agree
+
+    npm run db:check
+
+diffs `schema.prisma` against the live database. A COLUMN difference is a bug and
+will 500 at runtime: `doneVia` without `@map("done_via")` shipped once and the
+day plan returned 500 for every request, because Prisma asked for a column that
+did not exist while the migration had created the snake_case one.
+
+One difference is expected and cannot be removed: the covering index on
+`measurements` uses `INCLUDE`, which Prisma cannot express. Anything else
+appearing here is drift worth fixing.

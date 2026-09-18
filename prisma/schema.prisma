@@ -157,6 +157,10 @@ model Exchange {
 
   observations Observation[]
 
+  /// "what has this person said that never got an answer" runs on every
+  /// incoming message, to fold back-to-back messages into one reply.
+  @@index([userId, repliedAt])
+
   @@map("exchanges")
 }
 
@@ -283,6 +287,8 @@ model Report {
   markers      GeneticMarker[]
 
   @@index([userId, collectedOn])
+  /// Matching an uploaded PDF to the report it is.
+  @@index([userId, bookingRef])
   /// The lab's own reference for this booking, as printed on the report. It is
   /// what tells two blood tests collected on the SAME DAY apart - he has two
   /// from 22 Apr 2023 - which a date alone cannot do, and it is how an uploaded
@@ -351,6 +357,9 @@ model Measurement {
   sourceFile   StoredFile? @relation(fields: [sourceFileId], references: [id], onDelete: SetNull)
 
   @@index([userId, variable, collectedOn])
+  /// "show me every number that came off this scan" is the verification
+  /// question, and it should not be a sequential scan of the whole table.
+  @@index([sourceFileId])
   @@map("measurements")
 }
 
@@ -477,7 +486,7 @@ model GeneticMarker {
 /// double his measurements - and a record that silently doubles a reading is
 /// worse than one that rejects a file.
 model StoredFile {
-  id     String @id @default(uuid()) @db.Uuid
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId String @map("user_id") @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -529,6 +538,8 @@ model StoredFile {
 
   @@unique([userId, hash])
   @@index([userId, kind, contentDate])
+  /// Finding the file that carries a given booking reference.
+  @@index([userId, bookingRef])
   @@map("stored_files")
 }
 
@@ -587,7 +598,7 @@ model VariableCatalog {
 /// working access to a health record, and nobody - including me - can read back
 /// a key that was issued.
 model AgentKey {
-  id     String @id @default(uuid()) @db.Uuid
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId String @map("user_id") @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -629,7 +640,7 @@ model AgentKey {
 /// with their schedules, and a to-do list that has to be maintained separately
 /// from the record is a to-do list that will disagree with it.
 model PlanItem {
-  id     String @id @default(uuid()) @db.Uuid
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId String @map("user_id") @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -661,7 +672,7 @@ model PlanItem {
   /// observation that proved it. Worth keeping separate - "I ticked this" and
   /// "the app decided I meant this" are different levels of certainty, and if
   /// the matching ever goes wrong this is how it is found.
-  doneVia       DoneVia?
+  doneVia       DoneVia?     @map("done_via")
   observationId String?      @map("observation_id") @db.Uuid
   observation   Observation? @relation(fields: [observationId], references: [id], onDelete: SetNull)
 
