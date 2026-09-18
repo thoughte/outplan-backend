@@ -169,15 +169,43 @@ export async function digestPending(userId: string, fullName: string, limit = 25
           },
         });
         if (twin) {
+          // Which copy is CURRENT is decided by how much of the report it
+          // actually contains, not by which happened to be read first.
+          //
+          // He has partial exports of the same report - one of his 22 Apr 2023
+          // copies holds 9,344 characters where another holds 64,802. First-read
+          // wins would have crowned the 9,344-character fragment and pushed the
+          // complete report behind it, which is the opposite of useful.
+          const fuller = text.length > (twin.text?.length ?? 0);
           await prisma.storedFile.update({
             where: { id: f.id },
             data: {
-              text, digestedAt: new Date(), status: 'superseded',
+              text, digestedAt: new Date(),
+              status: fuller ? 'current' : 'superseded',
               contentDate: date ? new Date(`${date}T00:00:00Z`) : null,
-              digestNote: `same report as "${twin.filename}" (${ref ?? date}) - kept, but not read into the record twice`,
+              digestNote: fuller
+                ? `same report as "${twin.filename}" (${ref ?? date}) - this copy is more complete, so it is the one shown`
+                : `same report as "${twin.filename}" (${ref ?? date}) - kept, but not read into the record twice`,
             },
           });
-          outcomes.push({ file: f.filename, result: 'same-report-already-here', detail: twin.filename });
+          if (fuller) {
+            await prisma.storedFile.update({
+              where: { id: twin.id },
+              data: {
+                status: 'superseded',
+                digestNote: `same report as "${f.filename}" (${ref ?? date}) - that copy is more complete`,
+              },
+            });
+            // Provenance follows the fuller copy: the page someone is sent to
+            // should be the one that actually shows the result.
+            await prisma.report.updateMany({ where: { userId, sourceFileId: twin.id }, data: { sourceFileId: f.id } });
+            await prisma.measurement.updateMany({ where: { userId, sourceFileId: twin.id }, data: { sourceFileId: f.id } });
+          }
+          outcomes.push({
+            file: f.filename,
+            result: 'same-report-already-here',
+            detail: `${twin.filename}${fuller ? ' (this one is more complete)' : ''}`,
+          });
           continue;
         }
       }

@@ -28,6 +28,24 @@ function toLines(items: { str: string; transform: number[] }[]): string[] {
     .filter(Boolean);
 }
 
+/** Make extracted text storable without losing anything that means something.
+ *
+ *  Postgres refuses a TEXT value containing a NUL byte - error 22021 - and PDFs
+ *  contain them: one of his reports failed to save for exactly this reason.
+ *  Unpaired surrogates are rejected the same way.
+ *
+ *  ONLY those are removed. An earlier version of a different cleaner in this
+ *  codebase stripped everything outside [a-z0-9], which reduced a line of Hindi
+ *  to a single space. Accents, combining marks, symbols and every script stay:
+ *  the point is to drop bytes that cannot be stored, not characters that are
+ *  inconvenient. */
+function storable(text: string): string {
+  return text
+    .replace(/\u0000/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+}
+
 export interface PdfText {
   pages: number;
   text: string;
@@ -57,7 +75,7 @@ export async function pdfText(bytes: Buffer): Promise<PdfText> {
       if (lines.length) out.push(lines.join('\n'));
       page.cleanup();
     }
-    const text = out.join('\n\n');
+    const text = storable(out.join('\n\n'));
     return {
       pages: doc.numPages,
       text,
