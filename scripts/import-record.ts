@@ -10,8 +10,37 @@
  *  because an import that must only ever be run once is an import that will be
  *  run twice.
  */
-import Database from 'better-sqlite3';
+import type DatabaseType from 'better-sqlite3';
 import path from 'node:path';
+
+/** Loaded at call time, not imported at the top, and deliberately NOT a
+ *  dependency of this package.
+ *
+ *  better-sqlite3 is a native module: installing it compiles C++ and needs
+ *  Python and a toolchain. The server image has neither, and it never runs this
+ *  script - but `npm ci` installs devDependencies too, so simply listing it here
+ *  broke every container build with a node-gyp error four layers deep. Nothing
+ *  in the running service ever touches SQLite; only this one migration tool
+ *  does, and only on a laptop.
+ *
+ *  So it is fetched on demand, and the failure tells you the one command to run
+ *  rather than throwing MODULE_NOT_FOUND at you.
+ */
+function openSqlite(file: string): DatabaseType.Database {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Database = require('better-sqlite3') as typeof DatabaseType;
+    return new Database(file, { readonly: true });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
+      throw new Error(
+        'This script needs the SQLite driver, which is not installed because the\n' +
+        'server image cannot compile it. Install it just for this run:\n\n' +
+        '    npm i --no-save better-sqlite3\n');
+    }
+    throw e;
+  }
+}
 import { prisma } from '../src/lib/prisma';
 
 const DEFAULT_DB = path.join(process.env.HOME ?? '', 'Claude/Health/data/health.db');
@@ -35,7 +64,7 @@ async function main(): Promise<void> {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) { console.error(`no account for ${email}`); process.exit(1); }
 
-  const src = new Database(dbPath, { readonly: true });
+  const src = openSqlite(dbPath);
   const all = <T>(q: string): T[] => src.prepare(q).all() as T[];
 
   // Clear this user's record first. Reports cascade to measurements and markers.
