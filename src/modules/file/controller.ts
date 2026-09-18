@@ -4,7 +4,7 @@ import { HttpStatusCode } from '../../shared/enums';
 import { unauthorized, badRequest } from '../../errors/app.errors';
 import type { AuthenticatedRequest } from '../../shared/types';
 import { fileService } from './service';
-import { uploadSchema, ACCEPTED } from './types';
+import { uploadSchema, resolveType } from './types';
 
 /** Held in memory, not streamed to a temp file.
  *
@@ -21,8 +21,8 @@ export const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
-    if (ACCEPTED[file.mimetype]) return cb(null, true);
-    cb(badRequest(`Cannot accept ${file.mimetype || 'that file type'}`));
+    if (resolveType(file.mimetype, file.originalname)) return cb(null, true);
+    cb(badRequest(`Cannot accept ${file.originalname.split('.').pop() ?? 'that file type'} files`));
   },
 });
 

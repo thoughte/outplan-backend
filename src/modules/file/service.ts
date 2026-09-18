@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { ENV_CONFIG } from '../../config/env.config';
 import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../errors/app.errors';
-import { ACCEPTED, TEXTUAL, type UploadInput } from './types';
+import { ACCEPTED, TEXTUAL, resolveType, type UploadInput } from './types';
 import type { StoredFile } from '../../../generated/prisma/client';
 
 /** Where a file lives on the volume.
@@ -31,8 +31,11 @@ export const fileService = {
    */
   async store(userId: string, file: Express.Multer.File, input: UploadInput):
     Promise<{ stored: StoredFile; duplicate: boolean }> {
-    const ext = ACCEPTED[file.mimetype];
-    if (!ext) throw badRequest(`Cannot accept ${file.mimetype || 'that file type'}`);
+    const mediaType = resolveType(file.mimetype, file.originalname);
+    if (!mediaType) {
+      throw badRequest(`Cannot accept ${file.originalname.split('.').pop() ?? 'that file type'} files`);
+    }
+    const ext = ACCEPTED[mediaType];
     if (!file.size) throw badRequest('That file is empty');
 
     const hash = createHash('sha256').update(file.buffer).digest('hex');
@@ -50,19 +53,19 @@ export const fileService = {
     // Text goes in the database because the engine reads the database and never
     // opens a file. A PDF is stored now and parsed later; saying so beats
     // leaving a null nobody can explain.
-    const textual = TEXTUAL.has(file.mimetype);
+    const textual = TEXTUAL.has(mediaType);
     const text = textual ? file.buffer.toString('utf8') : null;
 
     try {
       const stored = await prisma.storedFile.create({
         data: {
-          userId, hash, filename: file.originalname, mediaType: file.mimetype,
+          userId, hash, filename: file.originalname, mediaType,
           bytes: file.size, path: rel, kind: input.kind, status: input.status,
           contentDate: input.contentDate ? new Date(`${input.contentDate}T00:00:00Z`) : null,
           text,
           digestedAt: textual ? new Date() : null,
           digestNote: textual ? (input.note ?? null)
-            : `stored; ${file.mimetype} text not extracted yet`,
+            : `stored; ${mediaType} text not extracted yet`,
         },
       });
       return { stored, duplicate: false };
