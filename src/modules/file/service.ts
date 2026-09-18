@@ -85,6 +85,10 @@ export const fileService = {
         id: true, filename: true, mediaType: true, bytes: true, kind: true,
         status: true, contentDate: true, uploadedAt: true, digestedAt: true,
         digestNote: true, hash: true,
+        // What reading it found. On screen this is the difference between "a
+        // file is here" and "this is your 4 Sep blood panel, 43 pages" - and
+        // between a report that is in the record and one that merely exists.
+        bookingRef: true, pages: true,
       },
     });
   },
