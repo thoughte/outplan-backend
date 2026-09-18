@@ -22,6 +22,18 @@ import { readFile, readdir } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 
 const API = process.env.API_BASE ?? 'https://api.outplan.org';
+
+/** Whose record this migration is for.
+ *
+ *  Checked before a single byte is sent, because a key only works for the
+ *  account that issued it and the app has more than one signed in on this
+ *  laptop. The first key he created was issued from the playground account by
+ *  mistake - and had this script not asked, it would have cheerfully uploaded
+ *  his blood tests, his master plan and eight years of his medical history into
+ *  a test account, where they do not belong and where nothing would have looked
+ *  obviously wrong afterwards.
+ */
+const OWNER = 'ekunalkhanna@gmail.com';
 const TOKEN_FILE = '/Users/work/Claude/Health/.secrets/id_token';
 const SESSION_FILE = '/Users/work/Claude/Health/.secrets/session_id';
 
@@ -69,6 +81,18 @@ async function main(): Promise<void> {
 
   const token = (await readFile(TOKEN_FILE, 'utf8').catch(() => '')).trim();
   if (!token) throw new Error(`No token at ${TOKEN_FILE}`);
+
+  // Who does this key actually belong to? Ask the server, do not assume.
+  const who = await fetch(`${API}/api/v1/me`, { headers: { authorization: `Bearer ${token}` } });
+  if (!who.ok) throw new Error(`That key was refused: ${who.status} ${await who.text()}`);
+  const me = (await who.json() as { data: { email: string } }).data;
+  if (me.email !== OWNER) {
+    throw new Error(
+      `STOPPING. That key belongs to ${me.email}, not ${OWNER}.\n` +
+      `His record must not be uploaded into another account. Sign in to outplan as\n` +
+      `${OWNER}, issue the key from there, and paste that one instead.`);
+  }
+  console.log(`key belongs to ${me.email} — correct account\n`);
   const existing = (await readFile(SESSION_FILE, 'utf8').catch(() => '')).trim();
 
   // Register this as a device, unless one was supplied. Every request needs both
