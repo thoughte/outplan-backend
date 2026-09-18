@@ -12,6 +12,7 @@ import { notFoundMiddleware, errorMiddleware } from './middleware/error.middlewa
 import { userController } from './modules/user/controller';
 import { authSessionController } from './modules/auth-session/controller';
 import { talkController } from './modules/talk/controller';
+import { fileController, upload } from './modules/file/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -87,6 +88,14 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.list);
   app.delete(API_PREFIX + ALL_ROUTES.sessions.one, authSessionController.revokeOne);
   app.delete(API_PREFIX + ALL_ROUTES.sessions.base, authSessionController.revokeAll);
+
+  // Files. `upload.single` runs before the controller so multipart is parsed
+  // into req.file; it is registered per route rather than globally, because a
+  // body parser that runs on every request is a body parser that will one day
+  // run on a request nobody checked.
+  app.post(API_PREFIX + ALL_ROUTES.files.base, upload.single('file'), fileController.upload);
+  app.get(API_PREFIX + ALL_ROUTES.files.base, fileController.list);
+  app.get(API_PREFIX + ALL_ROUTES.files.content, fileController.content);
 
   // /talk/export before /talk/:id - Express matches in registration order, and
   // the other way round "export" is read as an id and the route is dead.

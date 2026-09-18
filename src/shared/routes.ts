@@ -10,6 +10,12 @@ export const ALL_ROUTES = {
     one: '/sessions/:id',
   },
 
+  files: {
+    base: '/files',
+    one: '/files/:id',
+    content: '/files/:id/content',
+  },
+
   talk: {
     base: '/talk',
     // NOTE: /talk/export must be registered BEFORE /talk/:id, or Express matches

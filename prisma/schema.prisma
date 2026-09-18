@@ -267,7 +267,10 @@ model Report {
   markers      GeneticMarker[]
 
   @@index([userId, collectedOn])
-  files StoredFile[]
+  /// The uploaded file this report was read out of, when there is one. Null for
+  /// the eight imported from the old SQLite record before any file existed.
+  sourceFileId String?     @map("source_file_id") @db.Uuid
+  sourceFile   StoredFile? @relation(fields: [sourceFileId], references: [id], onDelete: SetNull)
 
   @@map("reports")
 }
@@ -313,6 +316,12 @@ model Measurement {
   /// thou/mm3" - must not be quietly rewritten into whatever makes the chart
   /// look right. It is left unplotted and visible instead.
   canonicalFlag  String? @map("canonical_flag")
+
+  /// Which file this number was read from. Denormalised deliberately: "show me
+  /// the page this came from" must not depend on the report still existing, or
+  /// on a report having exactly one source.
+  sourceFileId String?     @map("source_file_id") @db.Uuid
+  sourceFile   StoredFile? @relation(fields: [sourceFileId], references: [id], onDelete: SetNull)
 
   @@index([userId, variable, collectedOn])
   @@map("measurements")
@@ -445,8 +454,13 @@ model StoredFile {
   /// rules blocks ingestion without throwing the file away.
   digestedAt DateTime? @map("digested_at")
   digestNote String?   @map("digest_note")
-  reportId   String?   @map("report_id") @db.Uuid
-  report     Report?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  /// What was read out of this file. Provenance points FROM the record TO the
+  /// file, not the other way round: one scan can yield a whole report, and one
+  /// report can be assembled from several scans, so a single report_id on the
+  /// file cannot express it.
+  reports      Report[]
+  measurements Measurement[]
 
   @@unique([userId, hash])
   @@index([userId, kind, contentDate])
