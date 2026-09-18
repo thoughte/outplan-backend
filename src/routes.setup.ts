@@ -95,6 +95,9 @@ export function setupAppRoutes(app: Express): void {
   // run on a request nobody checked.
   app.post(API_PREFIX + ALL_ROUTES.files.base, upload.single('file'), fileController.upload);
   app.get(API_PREFIX + ALL_ROUTES.files.base, fileController.list);
+  // Before /files/:id, or Express reads "read-pending" as an id and this route
+  // is unreachable - the same trap as /talk/export.
+  app.post(API_PREFIX + ALL_ROUTES.files.readPending, fileController.readPending);
   app.get(API_PREFIX + ALL_ROUTES.files.content, fileController.content);
 
   // /talk/export before /talk/:id - Express matches in registration order, and

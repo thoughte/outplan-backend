@@ -13,6 +13,7 @@ export const ALL_ROUTES = {
   files: {
     base: '/files',
     one: '/files/:id',
+    readPending: '/files/read-pending',
     content: '/files/:id/content',
   },
 

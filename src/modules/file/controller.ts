@@ -76,6 +76,31 @@ export const fileController = {
     } catch (e) { next(e); }
   },
 
+  /** Read anything still unread, now.
+   *
+   *  Until this existed, a file could only be read when the container next
+   *  restarted. That made "re-read my files" a deployment, which is absurd for
+   *  something the owner of the record should be able to ask for - and it meant
+   *  a file that failed once sat unread until something unrelated happened to
+   *  ship.
+   *
+   *  It answers with what it did, per file, rather than a count: "linked to your
+   *  4 Sep panel" and "two reports share this booking, so it is not linked" are
+   *  different outcomes and he should see which is which.
+   */
+  async readPending(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw unauthorized();
+      const name = NAMES[req.user.email];
+      if (!name) {
+        res.status(HttpStatusCode.Ok).json({ ok: true, data: [], note: 'no identity on file to check reports against' });
+        return;
+      }
+      const results = await digestPending(req.user.id, name, 30);
+      res.status(HttpStatusCode.Ok).json({ ok: true, data: results });
+    } catch (e) { next(e); }
+  },
+
   async list(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw unauthorized();
