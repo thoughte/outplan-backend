@@ -395,6 +395,19 @@ model Observation {
   value    String @db.Text
   notes    String? @db.Text
 
+  /// Said, but not yet done.
+  ///
+  /// "I will have veg biryani in 30 mins" is not a meal, it is an intention -
+  /// and the first version of extraction filed it as one, with the word
+  /// "planned" buried in the notes while the row itself asserted he had eaten.
+  /// If he skips it his record says otherwise, and anything counting what he
+  /// actually ate counts it.
+  ///
+  /// Kept rather than discarded, because what he intends is worth knowing and
+  /// he took the trouble to say it. It simply must not be mistaken for what
+  /// happened.
+  planned Boolean @default(false)
+
   /// The message this was read out of, when it came from a conversation.
   ///
   /// Provenance, the same rule as a measurement pointing at the page it was

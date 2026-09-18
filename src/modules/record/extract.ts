@@ -64,6 +64,13 @@ const EXTRACT_TOOL = {
               maxLength: 400,
               description: 'Detail worth keeping that does not fit the value - timing, severity, context.',
             },
+            planned: {
+              type: 'boolean',
+              description:
+                'True when they said they WILL do it rather than that they did. ' +
+                '"I will have biryani in 30 mins" is planned; "I had biryani" is not. ' +
+                'Getting this wrong puts a meal in their record that they may never have eaten.',
+            },
           },
           required: ['kind', 'value'],
         },
@@ -87,9 +94,13 @@ const SYSTEM = [
   '',
   'Never record the same thing twice in one message. Never carry anything over from',
   'earlier messages: you are shown one message and you write down what is in it.',
+  '',
+  'Mark anything they say they WILL do as planned. "I will have biryani in 30 minutes"',
+  'has not happened yet; recording it as though it did puts a meal in their record',
+  'they may never eat.',
 ].join('\n');
 
-export interface Extracted { kind: string; value: string; notes?: string }
+export interface Extracted { kind: string; value: string; notes?: string; planned?: boolean }
 
 /** Ask the model what this message reports. Null on any failure - the caller
  *  treats that as "nothing recorded", never as an error worth surfacing. */
@@ -132,7 +143,7 @@ async function readMessage(said: string): Promise<Extracted[] | null> {
         && typeof (o as Extracted).value === 'string'
         && (o as Extracted).value.trim() !== ''
         && (KINDS as readonly string[]).includes((o as Extracted).kind))
-      .map((o) => ({ kind: o.kind, value: o.value.trim().slice(0, 200), notes: o.notes?.trim().slice(0, 400) || undefined }))
+      .map((o) => ({ kind: o.kind, value: o.value.trim().slice(0, 200), notes: o.notes?.trim().slice(0, 400) || undefined, planned: o.planned === true }))
       // The same thing twice in one message is a model slip, not two events.
       .filter((o) => { const k = `${o.kind}|${o.value.toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; })
       .slice(0, 8);
@@ -168,6 +179,7 @@ export async function recordFrom(
         variable: o.kind,
         value: o.value,
         notes: o.notes ?? null,
+        planned: o.planned === true,
       })),
     }),
     prisma.exchange.update({ where: { id: exchangeId }, data: { parsed: found as never } }),
