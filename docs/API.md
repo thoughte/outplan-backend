@@ -79,6 +79,35 @@ of client-safe settings; the same table holds CORS origins and the model name.
 
 ---
 
+## Account
+
+### `GET /api/v1/me`
+`needsSetup` is true until name, date of birth and city are all present. Derived
+from the fields, never stored as a flag, because a flag outlives someone clearing
+a field and then the app is certain about something that stopped being true.
+
+The app routes to setup when it is true. It is **not** enforced in the API: a bug
+in the setup screen must not be able to lock someone out of their own record.
+
+`name` is a **safety field**. Every uploaded report is identity-checked against it
+before a single number is read. Where it is missing, files are stored and not
+read, which is the safe direction: an unread file is recoverable, another
+person's blood test written into a health record is not.
+
+`age` is worked out from the date on every read. A stored age rots.
+
+### `PATCH /api/v1/me`
+Writes only the fields sent. A blanket update would blank what the caller left
+out, so saving a city would quietly erase the name the report check depends on.
+
+Legacy timezone aliases are normalised by an explicit table, not by `Intl`. A
+browser in Kanpur reports `Asia/Calcutta`, and `Intl.resolvedOptions()` is
+runtime-dependent: on this Node it resolves `Asia/Kolkata` **to**
+`Asia/Calcutta`, the opposite direction. A zone that cannot be formatted is
+dropped rather than stored, because it would then throw on every later use.
+
+---
+
 ## Session
 
 ### `POST /api/v1/sessions`

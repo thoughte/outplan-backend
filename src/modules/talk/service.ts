@@ -5,7 +5,7 @@ import { buildBrief } from '../record/brief';
 import { buildContext } from './context';
 import { TALK_PROMPT_KEY } from '../prompt/defaults';
 import { userRepo } from '../user/repo';
-import { localDay } from '../../shared/helper';
+import { localDay, clockFor } from '../../shared/helper';
 import { recordFrom } from '../record/extract';
 import { talkRepo } from './repo';
 import {
@@ -65,8 +65,24 @@ export const talkService: TalkService = {
       // Order matters. The prompt is who it is, the record is what is true, and
       // the summary is what has already been said and no longer fits. All three
       // are background; only the live turns are the conversation.
+      // The clock goes near the top, above the record.
+      //
+      // It is not a fact about his health, it is the context the whole
+      // conversation happens in, and without it the model was inferring the hour
+      // from what he had eaten. For someone whose reflux is a function of the
+      // gap between eating and lying down, that is advice produced out of
+      // nothing.
+      const clock = clockFor(new Date(), user.timezone);
+      const whoAndWhen = [
+        user.name ? `You are talking to ${user.name}.` : null,
+        clock
+          ? `It is ${clock} where they are${user.city ? ` (${user.city})` : ''}.`
+          : 'You do not know what time it is for them. Say so if asked; never guess it from what they have eaten.',
+      ].filter(Boolean).join(' ');
+
       const system = [
         prompt.content,
+        `---\n\n${whoAndWhen}`,
         brief ? `---\n\n${brief}` : null,
         summary ? `---\n\nEARLIER IN THIS CONVERSATION, condensed:\n\n${summary}` : null,
       ].filter(Boolean).join('\n\n');

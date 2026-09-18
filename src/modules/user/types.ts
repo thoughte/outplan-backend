@@ -5,14 +5,45 @@ export interface UserResponse {
   id: string;
   email: string;
   role: Role;
+  name: string | null;
+  dateOfBirth: string | null;
+  city: string | null;
   timezone: string;
+  /** Age in whole years, worked out rather than stored.
+   *
+   *  Stored age is a number that rots without anyone touching it. This one is
+   *  right every morning because it is derived from the date every time. */
+  age: number | null;
+  /** Whether the app knows who this is well enough to do its job.
+   *
+   *  Derived from the fields being present, never stored as a flag. A flag set
+   *  once outlives someone clearing a field, and then the app is certain about
+   *  something that stopped being true. */
+  needsSetup: boolean;
   createdAt: string;
 }
 
 export const updateMeSchema = z.object({
+  /** As it appears on medical reports. The screen says so, because this is what
+   *  every uploaded report is matched against before a number is read from it,
+   *  and a nickname here silently disables that check. */
+  name: z.string().trim().min(2, 'Give the name as it appears on your reports').max(120).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional(),
+  city: z.string().trim().min(1).max(80).optional(),
   timezone: z.string().min(1).max(64).optional(),
 });
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+
+/** Whole years, counting backwards from today. */
+export function ageFrom(dob: Date | null): number | null {
+  if (!dob) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - dob.getUTCFullYear();
+  const beforeBirthday = now.getUTCMonth() < dob.getUTCMonth()
+    || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
 
 /** Never return the row. A mapper is the only place that decides what leaves
  *  the server, so a column added later is invisible until someone adds it here
@@ -22,7 +53,15 @@ export function toUserResponse(u: User): UserResponse {
     id: u.id,
     email: u.email,
     role: u.role,
+    name: u.name,
+    dateOfBirth: u.dateOfBirth ? u.dateOfBirth.toISOString().slice(0, 10) : null,
+    city: u.city,
     timezone: u.timezone,
+    age: ageFrom(u.dateOfBirth),
+    // The zone is deliberately NOT part of this test. Every account carries one
+    // from a column default, so requiring it would be satisfied by an
+    // assumption nobody made. The city is the thing that was actually answered.
+    needsSetup: !u.name || !u.dateOfBirth || !u.city,
     createdAt: u.createdAt.toISOString(),
   };
 }

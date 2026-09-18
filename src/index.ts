@@ -53,13 +53,25 @@ async function catchUpOnFiles(): Promise<void> {
   try {
     const users = await prisma.user.findMany({
       where: { files: { some: { digestedAt: null } } },
-      select: { id: true, email: true },
+      select: { id: true, email: true, name: true },
     });
     for (const u of users) {
-      // The name to check a report against comes from the account, and the only
-      // account with a record to protect is his. Anything else is left alone.
-      const name = u.email === 'ekunalkhanna@gmail.com' ? 'Kunal Khanna' : null;
-      if (!name) continue;
+      // The name a report is checked against comes from the account.
+      //
+      // It used to be a string literal matched on his email address, so the
+      // identity check - run before a single number is read out of a PDF -
+      // worked for exactly one person and silently did nothing for anyone else.
+      // A household sharing a laptop and a lab is the case that check exists
+      // for.
+      //
+      // No name still means no digestion, which is the safe direction: a file
+      // left unread is recoverable, someone else's numbers written into a
+      // health record is not.
+      const name = u.name?.trim();
+      if (!name) {
+        console.warn(`[digest] ${u.email} has files waiting but no name on the account, so nothing can be identity-checked`);
+        continue;
+      }
       const results = await digestPending(u.id, name);
       for (const r of results) {
         console.log(`[digest] ${r.result.padEnd(24)} ${r.file}${r.detail ? ' - ' + r.detail : ''}`);

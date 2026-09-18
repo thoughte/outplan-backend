@@ -27,6 +27,33 @@ model User {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique
   role      Role     @default(member)
+  /// Their name AS IT APPEARS ON MEDICAL REPORTS, which is why it is asked for
+  /// that way on screen.
+  ///
+  /// This is a safety field, not a courtesy. It is the only thing standing
+  /// between a household member's blood test and someone else's permanent
+  /// record: every uploaded report is checked against it before a single number
+  /// is read. "Kunal" does not match a report printed as "Mr KUNAL KHANNA", and
+  /// someone who types a nickname has quietly disabled that check.
+  ///
+  /// Until this existed the check compared against a string literal in two
+  /// source files, so it worked for exactly one person and silently did nothing
+  /// for everyone else.
+  name String?
+
+  /// A date, never an age. Age is a number that rots without anyone touching
+  /// it; a birth date stays true. Most of what a marker means depends on it.
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+
+  /// Where they live, in their own words. Kept alongside the zone because
+  /// "Kanpur" is what he understands and "Asia/Kolkata" is what the arithmetic
+  /// needs, and showing him the second one back would be the app talking to
+  /// itself.
+  city String?
+
+  /// IANA zone. Still defaulted so nothing breaks before setup runs, but the
+  /// default is now a placeholder rather than an assumption: the app knows the
+  /// profile is incomplete and says so.
   timezone  String   @default("Asia/Kolkata")
   createdAt DateTime @default(now()) @map("created_at")
 

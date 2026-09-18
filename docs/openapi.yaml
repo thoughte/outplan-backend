@@ -589,8 +589,55 @@ paths:
     get:
       tags: [public]
       summary: Who this credential belongs to
-      responses: { '200': { description: Account } }
+      description: >
+        `needsSetup` is derived from name, date of birth and city being present,
+        never stored as a flag - a flag outlives someone clearing a field. The
+        app routes to setup when it is true. It is NOT enforced in the API: a bug
+        in the setup screen must not lock anyone out of their own health record.
+      responses:
+        '200':
+          description: Account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string }
+                      name:
+                        type: string
+                        nullable: true
+                        description: >
+                          As it appears on medical reports. A safety field: every
+                          uploaded report is identity-checked against it before a
+                          number is read. Where it is missing, files are stored
+                          and NOT read.
+                      dateOfBirth: { type: string, format: date, nullable: true }
+                      city: { type: string, nullable: true }
+                      timezone: { type: string, example: Asia/Kolkata }
+                      age: { type: integer, nullable: true, description: Worked out from the date, never stored. }
+                      needsSetup: { type: boolean }
     patch:
       tags: [public]
-      summary: Change timezone
+      summary: Set name, date of birth, city or timezone
+      description: >
+        Writes only the fields sent. A blanket update would blank what the caller
+        left out, so saving a city would erase the name the report check depends
+        on. Legacy zone aliases are normalised by an explicit table - a browser in
+        Kanpur reports "Asia/Calcutta" - and a zone that cannot be formatted is
+        dropped rather than stored.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                dateOfBirth: { type: string, format: date, example: "1993-04-27" }
+                city: { type: string, maxLength: 80 }
+                timezone: { type: string, example: Asia/Kolkata }
       responses: { '200': { description: Updated } }

@@ -5,6 +5,7 @@ import { unauthorized, badRequest } from '../../errors/app.errors';
 import type { AuthenticatedRequest } from '../../shared/types';
 import { fileService } from './service';
 import { digestPending } from '../record/digest';
+import { prisma } from '../../lib/prisma';
 import { uploadSchema, resolveType } from './types';
 
 /** Held in memory, not streamed to a temp file.
@@ -27,19 +28,24 @@ export const upload = multer({
   },
 });
 
-/** Whose name a report must carry to be linked to their record.
+/** Read a newly uploaded file, once the response has gone out.
  *
- *  Only his account has a record worth protecting, and the identity check needs
- *  a name to check against. Anything else is stored and left alone rather than
- *  matched against a name we do not have - guessing a person's name from their
- *  email address and then deciding whose blood test this is would be a very bad
- *  way to be wrong.
+ *  The name a report is identity-checked against comes from the account. It was
+ *  a string literal keyed on one email address, which meant the check protected
+ *  exactly one person and silently did nothing for everyone else.
+ *
+ *  No name still means no reading. That is the safe direction: a file left
+ *  unread is recoverable, and someone else's blood test written into a health
+ *  record is not. Guessing a name from an email address would be a very bad way
+ *  to be wrong.
  */
-const NAMES: Record<string, string> = { 'ekunalkhanna@gmail.com': 'Kunal Khanna' };
-
-async function readSoon(userId: string, email: string): Promise<void> {
-  const name = NAMES[email];
-  if (!name) return;
+async function readSoon(userId: string): Promise<void> {
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const name = me?.name?.trim();
+  if (!name) {
+    console.warn('[digest] file stored but not read: no name on the account to check it against');
+    return;
+  }
   try {
     const results = await digestPending(userId, name, 5);
     for (const r of results) console.log(`[digest] ${r.result.padEnd(24)} ${r.file}${r.detail ? ' - ' + r.detail : ''}`);
@@ -72,7 +78,7 @@ export const fileController = {
       // Deliberately fire-and-forget: a failure here must never fail an upload
       // that has already succeeded, and the boot-time pass picks up anything
       // left unread.
-      if (!duplicate) void readSoon(req.user.id, req.user.email);
+      if (!duplicate) void readSoon(req.user.id);
     } catch (e) { next(e); }
   },
 
@@ -91,9 +97,13 @@ export const fileController = {
   async readPending(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw unauthorized();
-      const name = NAMES[req.user.email];
+      const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
+      const name = me?.name?.trim();
       if (!name) {
-        res.status(HttpStatusCode.Ok).json({ ok: true, data: [], note: 'no identity on file to check reports against' });
+        res.status(HttpStatusCode.Ok).json({
+          ok: true, data: [],
+          note: 'Add your name in setup first. Reports are checked against it before anything is read from them.',
+        });
         return;
       }
       const results = await digestPending(req.user.id, name, 30);

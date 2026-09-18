@@ -21,6 +21,11 @@ export const userRepo = {
       create: { email },
     }),
 
+  /** Write only the fields given. See the note in the service: a blanket update
+   *  would erase whatever the caller left out. */
+  update: (id: string, data: Record<string, unknown>) =>
+    prisma.user.update({ where: { id }, data: data as never }),
+
   updateTimezone: (id: string, timezone: string): Promise<User> =>
     prisma.user.update({ where: { id }, data: { timezone } }),
 };
