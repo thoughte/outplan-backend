@@ -95,8 +95,14 @@ export async function tree(userId: string): Promise<GoalNode[]> {
             fraction: rollUp(children.map((c) => c.standing.fraction)),
             current: null,
             reached: children.length > 0 && children.every((c) => c.status === 'achieved'),
+            // Both numbers, because one on its own lies. The magnesium branch
+            // came back reading "100%" beside "0 of 2 done": the average of its
+            // children was 1, and none of them were finished, and each figure
+            // was true. Shown together with what they mean, they stop
+            // contradicting each other.
             summary: children.length
-              ? `${children.filter((c) => c.status === 'achieved').length} of ${children.length} done`
+              ? `${children.filter((c) => c.status === 'achieved').length} of ${children.length} finished, `
+                + `${children.filter((c) => c.standing.fraction === null).length} still waiting`
               : 'nothing under it yet',
           }
         : own;

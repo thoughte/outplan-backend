@@ -59,14 +59,23 @@ export function standing(
     : current <= target;
 
   const span = target - baseline;
-  // Baseline already at target. It is either done or the target needs to move;
-  // either way, reporting a division by zero as a percentage helps nobody.
-  const fraction = span === 0
-    ? (reached ? 1 : null)
-    : Math.max(0, Math.min(1, (current - baseline) / span));
+  if (span === 0) {
+    // Baseline and target are the same number, so there is no distance to
+    // travel and no progress to report. It came out of the decomposition as
+    // "hold serum magnesium at 2.1 or above" when 2.1 is exactly where he is,
+    // and showing that as 100% on day one is a congratulation for nothing.
+    //
+    // A "maintain" goal is a real thing, but it is measured by how long it
+    // stays there, not by distance. Until that exists, this says what it is.
+    return {
+      fraction: null, current, reached: false,
+      summary: `already at ${trim(target)}${u}, needs a target to move towards`,
+    };
+  }
 
   return {
-    fraction, current, reached,
+    fraction: Math.max(0, Math.min(1, (current - baseline) / span)),
+    current, reached,
     summary: `${trim(baseline)} to ${trim(target)}${u}, now ${trim(current)}${u}`,
   };
 }
