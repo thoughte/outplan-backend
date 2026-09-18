@@ -112,6 +112,35 @@ export function namesPerson(text: string, fullName: string): boolean {
   return parts.every((p) => flat.includes(p));
 }
 
+/** Blood panel or genetics, from what the page actually talks about.
+ *
+ *  Needed because a booking reference does not identify a report on its own.
+ *  His 22 Apr 2023 blood panel and his DNA wellness report share reference
+ *  7916244308 - one visit, one booking, two very different documents - so
+ *  without this the 392-page genetics report can be filed as the blood panel
+ *  and the blood panel's own pages become unreachable.
+ */
+export function detectKind(text: string): 'genetic' | 'blood' | null {
+  const t = text.toLowerCase();
+  const count = (re: RegExp): number => (t.match(re) ?? []).length;
+
+  // Only markers that a blood panel has no reason to print. Bare "dna" is not
+  // one of them: his 41-page blood report mentions it three times in passing
+  // and was filed as a genetics report because of it. A real genetics report is
+  // not subtle - his has 585 genotypes and 53 rs-IDs, against that report's
+  // zero of each.
+  const genetic = count(/\bgenotypes?\b/g) + count(/\brs\d{4,}\b/g)
+    + count(/\bpolymorphism\b/g) + count(/\balleles?\b/g);
+  const blood = count(/\b(h[ae]moglobin|creatinine|bilirubin|triglycerides?|leucocyte|platelets?|serum|vitamin|cholesterol|tsh|urea|albumin)\b/g);
+
+  if (genetic >= 25) return 'genetic';
+  if (blood >= 5 && blood > genetic) return 'blood';
+  // Better to say nothing than to say the wrong thing: an unknown kind simply
+  // does not narrow the candidates, while a wrong one files the report as
+  // something it is not.
+  return null;
+}
+
 export interface DigestOutcome {
   file: string;
   result: 'read' | 'scanned-no-text' | 'wrong-person' | 'same-report-already-here' | 'failed' | 'skipped-type';
@@ -157,82 +186,74 @@ export async function digestPending(userId: string, fullName: string, limit = 25
 
       const date = collectionDate(text);
       const ref = bookingRef(text);
+      const kind = detectKind(text);
 
-      // DUPLICATE SECOND, and by CONTENT rather than by bytes. The same report
-      // downloaded twice is two different files with two different hashes - the
-      // upload dedup cannot see it, and only reading them can.
-      if (ref || date) {
-        const twin = await prisma.storedFile.findFirst({
-          where: {
-            userId, id: { not: f.id }, digestedAt: { not: null },
-            ...(ref ? { text: { contains: ref } } : { contentDate: date ? new Date(`${date}T00:00:00Z`) : undefined }),
-          },
-        });
-        if (twin) {
-          // Which copy is CURRENT is decided by how much of the report it
-          // actually contains, not by which happened to be read first.
-          //
-          // He has partial exports of the same report - one of his 22 Apr 2023
-          // copies holds 9,344 characters where another holds 64,802. First-read
-          // wins would have crowned the 9,344-character fragment and pushed the
-          // complete report behind it, which is the opposite of useful.
-          const fuller = text.length > (twin.text?.length ?? 0);
-          await prisma.storedFile.update({
-            where: { id: f.id },
-            data: {
-              text, digestedAt: new Date(),
-              status: fuller ? 'current' : 'superseded',
-              contentDate: date ? new Date(`${date}T00:00:00Z`) : null,
-              digestNote: fuller
-                ? `same report as "${twin.filename}" (${ref ?? date}) - this copy is more complete, so it is the one shown`
-                : `same report as "${twin.filename}" (${ref ?? date}) - kept, but not read into the record twice`,
-            },
-          });
-          if (fuller) {
-            await prisma.storedFile.update({
-              where: { id: twin.id },
-              data: {
-                status: 'superseded',
-                digestNote: `same report as "${f.filename}" (${ref ?? date}) - that copy is more complete`,
-              },
-            });
-            // Provenance follows the fuller copy: the page someone is sent to
-            // should be the one that actually shows the result.
-            await prisma.report.updateMany({ where: { userId, sourceFileId: twin.id }, data: { sourceFileId: f.id } });
-            await prisma.measurement.updateMany({ where: { userId, sourceFileId: twin.id }, data: { sourceFileId: f.id } });
-          }
-          outcomes.push({
-            file: f.filename,
-            result: 'same-report-already-here',
-            detail: `${twin.filename}${fuller ? ' (this one is more complete)' : ''}`,
-          });
-          continue;
-        }
-      }
-
-      // Match to a report already in the record.
-      //
-      // Booking reference first, because two of his blood panels were collected
-      // on the same day and a date cannot separate them. But a reference is not
-      // unique either: his 22 Apr 2023 blood panel and his DNA report carry the
-      // SAME booking number, 7916244308, because they came from one visit. So
-      // among the reports that match, prefer one that has no file yet -
-      // otherwise the second upload overwrites the first one's provenance and
-      // the DNA report silently claims the blood panel's pages.
-      const matches = ref
+      // FIND THE REPORT FIRST. The report is the identity of this document;
+      // "is this a duplicate" is then simply "does that report already have a
+      // file", which is a fact rather than a guess. Matching duplicates by
+      // searching text for a booking number instead made two different reports
+      // from one visit look like copies of each other.
+      let pool = ref
         ? await prisma.report.findMany({ where: { userId, bookingRef: ref } })
         : [];
-      const byDate = date && !matches.length
-        ? await prisma.report.findMany({ where: { userId, collectedOn: new Date(`${date}T00:00:00Z`) } })
-        : [];
-      const pool = matches.length ? matches : byDate;
+      if (!pool.length && date) {
+        pool = await prisma.report.findMany({ where: { userId, collectedOn: new Date(`${date}T00:00:00Z`) } });
+      }
+      // One booking can hold both a blood panel and a genetics report. What the
+      // pages talk about is what separates them.
+      if (pool.length > 1 && kind) {
+        const narrowed = pool.filter((r) => r.kind === kind);
+        if (narrowed.length) pool = narrowed;
+      }
+
+      const common = {
+        text, pages, digestedAt: new Date(),
+        bookingRef: ref,
+        contentDate: date ? new Date(`${date}T00:00:00Z`) : null,
+      };
+
+      // Prefer a report with no file yet; otherwise this is another copy of one
+      // already covered.
       const report = pool.find((r) => !r.sourceFileId) ?? null;
+
+      if (!report && pool.length) {
+        const held = pool[0];
+        const existing = held.sourceFileId
+          ? await prisma.storedFile.findUnique({ where: { id: held.sourceFileId } })
+          : null;
+        // Completeness decides which copy is shown, not arrival order. One of
+        // his 22 Apr 2023 copies holds 9,344 characters where another holds
+        // 64,802, and first-read-wins crowned the fragment.
+        const fuller = text.length > (existing?.text?.length ?? 0);
+        await prisma.storedFile.update({
+          where: { id: f.id },
+          data: {
+            ...common,
+            status: fuller ? 'current' : 'superseded',
+            digestNote: existing
+              ? `same report as "${existing.filename}"${fuller ? ' - this copy is more complete, so it is the one shown' : ' - kept, but not read into the record twice'}`
+              : 'another copy of a report already in the record',
+          },
+        });
+        if (fuller && existing) {
+          await prisma.storedFile.update({
+            where: { id: existing.id },
+            data: { status: 'superseded', digestNote: `same report as "${f.filename}" - that copy is more complete` },
+          });
+          await prisma.report.updateMany({ where: { userId, sourceFileId: existing.id }, data: { sourceFileId: f.id } });
+          await prisma.measurement.updateMany({ where: { userId, sourceFileId: existing.id }, data: { sourceFileId: f.id } });
+        }
+        outcomes.push({
+          file: f.filename, result: 'same-report-already-here',
+          detail: `${existing?.filename ?? 'a report already held'}${fuller ? ' (this one is more complete)' : ''}`,
+        });
+        continue;
+      }
 
       await prisma.storedFile.update({
         where: { id: f.id },
         data: {
-          text, digestedAt: new Date(),
-          contentDate: date ? new Date(`${date}T00:00:00Z`) : null,
+          ...common,
           digestNote: report
             ? null
             : `read (${pages} pages)${date ? `, collected ${date}` : ', no collection date found'} - no report in the record matches it yet`,

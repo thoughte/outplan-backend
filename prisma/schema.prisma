@@ -463,6 +463,14 @@ model StoredFile {
   /// nothing has been read out of them yet; `digestNote` says why when that was
   /// deliberate - no verified collection date, for instance, which under his own
   /// rules blocks ingestion without throwing the file away.
+  /// What reading the file found: the lab's booking reference, the collection
+  /// date and how many pages. Columns rather than a text search, because
+  /// searching text for a booking number matches every OTHER report from the
+  /// same visit - his blood panel and his DNA report share one reference, and
+  /// treating them as copies of each other loses the provenance of both.
+  bookingRef String? @map("booking_ref")
+  pages      Int?
+
   digestedAt DateTime? @map("digested_at")
   digestNote String?   @map("digest_note")
 
