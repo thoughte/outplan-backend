@@ -8,6 +8,18 @@ finishing. "You achieved 6 goals this month and 28 this year" is the thing he
 asked for out loud, and nothing rendered it: four endpoints and a scoreboard sat
 live with no `goals` entry in the frontend at all.
 
+**Correction, 19 Sep 2026.** This file, and I, repeatedly said he had a 40-goal
+tree waiting on the server. He does not. `GET /goals` on his account returns
+`{ goals: [], scoreboard: { thisMonth: 0, thisYear: 0, total: 0 } }`. The same
+key returns his farm, his day plan with his real medicines and his files, so the
+account is populated and it is goals specifically that is empty: the
+decomposition has never been run against it, or ran and never persisted.
+
+Where "40" came from is not established. It is repeated in the Decisions section
+below, which was written before anything was saved, and it should be read as the
+size the decomposition was *expected* to produce rather than a count of anything
+that exists. The three decisions themselves stand; only the number is unfounded.
+
 So this plan stands, unchanged in its decisions. What follows the decisions
 section is what has changed underneath it since.
 
@@ -182,8 +194,9 @@ screen that is two things: a visible mark saying where it came from, and its own
 confirm control even when its parent is already active. It is never styled as a
 lesser goal, because it may well be right.
 
-**`ASNEEDED` medicines no longer generate branches.** Nothing to render, but it
-is why the tree is smaller than the 40 this file was written against.
+**`ASNEEDED` medicines no longer generate branches.** So whenever the
+decomposition is next run, it produces fewer branches than this file assumed,
+and none for a tablet he takes twice a month.
 
 ## What the screen renders, given the API
 
