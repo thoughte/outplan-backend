@@ -265,7 +265,11 @@ export const talkService: TalkService = {
       // sentence the extractor can read. The question was asked by the
       // assistant, so it is never treated as something he said: it is context
       // for reading the one word that is his.
-      answered ? `${answered}\n${input.said}` : input.said,
+      // The question is stripped of digits before it is handed to extraction.
+      // It is the assistant's sentence, included only so "Boiled" reads as an
+      // answer rather than a change of subject. A number inside it is not his
+      // and must not become an amount.
+      answered ? `${answered.replace(/\d[\d.,]*/g, 'some')}\n${input.said}` : input.said,
       localDay(new Date(), user.timezone),
     )
       .then((n) => { if (n) console.log(`[extract] ${n} recorded from ${exchange.id}`); })

@@ -298,9 +298,22 @@ function normalise(input: unknown): ReplyParts | null {
     const options = q.options
       .filter((o): o is string => typeof o === 'string' && o.trim() !== '')
       .map((o) => o.trim()).slice(0, 4);
+    // NO NUMBERS IN OPTIONS.
+    //
+    // An option label is the assistant's words, not his. Tapping one is consent
+    // to a sentence somebody else wrote, so it may let him choose among things
+    // he said and must never supply a figure he did not. "400mg" offered as a
+    // chip and tapped arrives at the server as his message, goes through
+    // extraction, and becomes an amount in a medical record that he never
+    // uttered. The model may still ask how much. It may not author the answer.
+    //
+    // Cost, accepted: a legitimate chip like "1-2 times" dies with this and has
+    // to be typed.
+    const wordsOnly = options.filter((o) => !/\d/.test(o));
+
     // One option is not a choice. Drop the question and keep the messages
     // rather than showing a button that asks nothing.
-    if (options.length >= 2) question = { text: q.text.trim(), options };
+    if (wordsOnly.length >= 2) question = { text: q.text.trim(), options: wordsOnly };
   }
 
   return question ? { messages, question } : { messages };

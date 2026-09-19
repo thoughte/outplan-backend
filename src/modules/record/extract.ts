@@ -79,15 +79,22 @@ const EXTRACT_TOOL = {
                 'The unit for that number, in their terms: litres, ml, glasses, hours, minutes, ' +
                 'steps, rotis, pieces, cigarettes. Only alongside an amount.',
             },
-            planned: {
-              type: 'boolean',
+            said: {
+              type: 'string',
+              enum: ['did', 'will', 'did-not', 'used-to', 'considering', 'asking-about'],
               description:
-                'True when they said they WILL do it rather than that they did. ' +
-                '"I will have biryani in 30 mins" is planned; "I had biryani" is not. ' +
-                'Getting this wrong puts a meal in their record that they may never have eaten.',
+                'WHAT THEY CLAIMED ABOUT IT. Required on every item. ' +
+                'did = it happened. "I had biryani", "took my morning meds". ' +
+                'will = it has not happened yet. "I will have biryani in 30 mins". ' +
+                'did-not = they say they skipped or missed it. "forgot my magnesium". ' +
+                'used-to = it was true in the past and is not now. "I used to take that". ' +
+                'considering = they are weighing it. "I should stop the magnesium", "thinking of cutting tea". ' +
+                'asking-about = they are asking, not reporting. "is dal ok at night". ' +
+                'If none of these fits, leave the whole item out rather than guessing. ' +
+                'Only "did" enters their record as a thing that happened.',
             },
           },
-          required: ['kind', 'value'],
+          required: ['kind', 'value', 'said'],
         },
       },
     },
@@ -114,12 +121,27 @@ const SYSTEM = [
   'is not a number and must not become one. An invented amount is worse than no amount,',
   'because it enters the record looking exactly like something they told you.',
   '',
-  'Mark anything they say they WILL do as planned. "I will have biryani in 30 minutes"',
-  'has not happened yet; recording it as though it did puts a meal in their record',
-  'they may never eat.',
+  'SAY WHAT THEY CLAIMED, on every single item. There is no default and there is no',
+  'neutral value: `said` decides whether something enters their record as a thing that',
+  'happened. Only "did" does.',
+  '',
+  'It used to be a yes/no called `planned`, which had two values for a space that has at',
+  'least six, and the value it fell back to was "they did it". So "I should stop the',
+  'magnesium" and "I used to take that" and "the doctor said take it" all landed in the',
+  'record as a dose taken today. If none of the six fits what they said, leave the item',
+  'out entirely. A missing observation costs nothing; an invented one is a lie in a',
+  'medical record.',
 ].join('\n');
 
-export interface Extracted { kind: string; value: string; notes?: string; planned?: boolean; amount?: number; unit?: string }
+/** What someone claimed about a thing, not just the thing.
+ *
+ *  Six values because the space has at least six, and a boolean had two. The one
+ *  that matters is that there is NO default: an item the model cannot classify
+ *  is dropped rather than assumed. */
+export type Said = 'did' | 'will' | 'did-not' | 'used-to' | 'considering' | 'asking-about';
+export const SAID: readonly Said[] = ['did', 'will', 'did-not', 'used-to', 'considering', 'asking-about'];
+
+export interface Extracted { kind: string; value: string; notes?: string; said: Said; amount?: number; unit?: string }
 
 /** Ask the model what this message reports. Null on any failure - the caller
  *  treats that as "nothing recorded", never as an error worth surfacing. */
@@ -161,12 +183,18 @@ async function readMessage(said: string): Promise<Extracted[] | null> {
         && typeof (o as Extracted).kind === 'string'
         && typeof (o as Extracted).value === 'string'
         && (o as Extracted).value.trim() !== ''
-        && (KINDS as readonly string[]).includes((o as Extracted).kind))
+        && (KINDS as readonly string[]).includes((o as Extracted).kind)
+        // DROPPED, not defaulted. An item whose modality the model could not or
+        // did not classify is thrown away, exactly as an unrecognised `kind` is
+        // above. The old code defaulted the equivalent to "they did it", which
+        // meant a sentence the model could not represent landed in a medical
+        // record as something that happened.
+        && (SAID as readonly string[]).includes((o as Extracted).said))
       .map((o) => ({
         kind: o.kind,
         value: o.value.trim().slice(0, 200),
         notes: o.notes?.trim().slice(0, 400) || undefined,
-        planned: o.planned === true,
+        said: o.said,
         // A number that is not finite is not a number. NaN reaching the column
         // would poison every average taken over it afterwards.
         amount: typeof o.amount === 'number' && Number.isFinite(o.amount) ? o.amount : undefined,
@@ -207,7 +235,10 @@ export async function recordFrom(
         variable: o.kind,
         value: o.value,
         notes: o.notes ?? null,
-        planned: o.planned === true,
+        said: o.said,
+        // Kept in step with `said` so nothing reading the old column breaks
+        // while both exist. `said === 'will'` is the old `planned === true`.
+        planned: o.said === 'will',
         amount: o.amount ?? null,
         unit: o.unit ?? null,
       })),
@@ -221,12 +252,18 @@ export async function recordFrom(
   // the record; the plan is a view of it. If the matching gets something wrong
   // the observation is still right, and the tick can be undone.
   //
-  // Nothing planned counts: "I will take my magnesium at 8" has not happened.
+  // ONLY "did" ticks anything. Not "will", which has not happened; not
+  // "did-not", which is the opposite; and not "considering" or "asking-about",
+  // which are him thinking out loud.
+  //
+  // This used to read `if (o.planned) continue`, which let through everything
+  // that was not future tense. "I should stop the magnesium" is not future
+  // tense, and it would have ticked the magnesium off his day.
   const written = await prisma.observation.findMany({
-    where: { exchangeId }, select: { id: true, variable: true, value: true, planned: true },
+    where: { exchangeId }, select: { id: true, variable: true, value: true, said: true },
   });
   for (const o of written) {
-    if (o.planned) continue;
+    if (o.said !== 'did') continue;
     await markFromObservation(userId, localDay, o.id, o.variable, o.value)
       .then((n) => { if (n) console.log(`[plan] ticked ${n} from "${o.value.slice(0, 40)}"`); })
       .catch((err: Error) => console.error('[plan] could not tick:', err.message));

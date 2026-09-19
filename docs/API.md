@@ -260,6 +260,13 @@ Body: `{ "said": string, "answering"?: uuid }` → `201 { data: Exchange }`
   costs the message.
 - After the reply is sent, the message is read for observations. Not before: it
   would double the wait for an answer.
+- Every observation carries `said`: one of `did`, `will`, `did-not`, `used-to`,
+  `considering`, `asking-about`. **Only `did` is a thing that happened, and only
+  `did` ticks anything off the day plan.** An item whose modality the model
+  cannot classify is DROPPED, never defaulted. It replaces `planned`, a boolean
+  over a space with six values whose fallback was "they did it", so "I should
+  stop the magnesium" and "I used to take that" both entered the record as a
+  dose taken today.
 - **If the reasoning service cannot be reached, a plain reply says so** rather
   than leaving the message with nothing under it. `model` is `unavailable` and
   `promptVersion` is `unavailable:<status>`, so nothing reading back a prompt
@@ -282,6 +289,13 @@ Body: `{ "said": string, "answering"?: uuid }` → `201 { data: Exchange }`
 
 `replyParts.messages` is one to three bubbles. A `question` has two to four
 options; one option is not a choice and is dropped rather than rendered.
+
+**No option may contain a digit.** An option label is the assistant's words, not
+his. Tapping one is consent to somebody else's sentence, so it may let him choose
+among things he said and must never supply a figure he did not: "400mg" offered
+as a chip and tapped arrives as his message, goes through extraction, and becomes
+an amount in a medical record he never uttered. Options with digits are stripped;
+if fewer than two survive the question is dropped.
 
 **Most replies have no question.** The prompt used to say "use it often" while
 the reply tool said "only when the answer would change what you say next", and

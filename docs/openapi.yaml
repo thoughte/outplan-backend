@@ -771,6 +771,12 @@ paths:
         logged meal would tax every correct reading to catch the rare wrong one,
         and it would be another question.
 
+        Every observation carries `said`: did, will, did-not, used-to,
+        considering, asking-about. Only `did` is a thing that happened and only
+        `did` ticks the day plan. An item the model cannot classify is dropped
+        rather than defaulted, because the boolean this replaces defaulted to
+        "they did it".
+
         `parsed` is set to an empty array rather than null afterwards. "Read, and
         nothing in it" and "not looked at yet" are different facts.
 

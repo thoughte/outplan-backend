@@ -499,6 +499,24 @@ model Observation {
   /// happened.
   planned Boolean @default(false)
 
+  /// What they CLAIMED about it, not just what it was.
+  ///
+  /// One of: did, will, did-not, used-to, considering, asking-about. Only 'did'
+  /// is a thing that happened, and only 'did' ticks anything off the day plan.
+  ///
+  /// It supersedes `planned`, which was a boolean over a space with at least
+  /// six values and whose fallback was "they did it". Anything the model could
+  /// not represent fell through to that fallback: "I should stop the
+  /// magnesium", "I used to take that", "the doctor said take it" are none of
+  /// them future tense, so each would have entered the record as a dose taken
+  /// today.
+  ///
+  /// The default here exists only so the column can be added to a live table.
+  /// Nothing writes it by default: extraction DROPS an item whose modality it
+  /// cannot classify rather than assuming one, the same way it already drops an
+  /// unrecognised kind.
+  said String @default("did")
+
   /// The message this was read out of, when it came from a conversation.
   ///
   /// Provenance, the same rule as a measurement pointing at the page it was
