@@ -26,6 +26,42 @@ Thirty-nine endpoints already exist and are already scoped to one person. Nothin
 new has to be invented for the chat to drive; it needs a way to call them, a
 description of what each is for, and rules about which ones it may reach.
 
+## Does it go through the same API the frontend uses?
+
+His question, and the answer is **the same service layer and the same validation,
+not the same HTTP.**
+
+Checked rather than assumed. The controllers are thin: they parse the body with a
+Zod schema, check `req.user`, and delegate. Across goal, plan and talk there is
+not one business rule in a controller and not one database call. The only
+exception is `file/controller.ts`, which reads the account holder's name for the
+identity check, and that has to be carried over.
+
+Ownership lives one layer down, in the services, and it is re-checked on every
+mutation rather than assumed from the caller. `goalService.confirm` opens with
+`findFirst({ where: { id, userId } })`. `careService.share` and `careService.pause`
+both open with `findFirst({ where: { id: linkId, ownerId } })`. A service called
+directly cannot reach another person's row, because the row is fetched by owner
+before it is touched.
+
+So self-HTTP would buy nothing and cost real things: a second credential to hold,
+a network hop that can fail on its own, and a call that cannot join the
+transaction around it.
+
+**What MUST be shared is the validation.** The controllers parse with Zod. A tool
+that took the model's arguments straight into a service would have weaker
+checking than the same action from the frontend, which is exactly the kind of
+second door with weaker locks this plan refuses elsewhere. So each tool names the
+SAME schema object the controller uses. One schema, two callers.
+
+**The risk this creates, and the guard.** If anybody later puts a rule in a
+controller, the chat silently skips it. The convention is that controllers stay
+thin, and `npm run tools:check` asserts it: every mutating route's service call
+either has a tool entry or is explicitly listed as out of reach, and any
+controller that grows a database call or a conditional fails the check. The same
+shape as `docs:check`, and for the same reason: two things that must agree will
+not, unless something says so out loud.
+
 ## 1. Files and images
 
 **They go through the pipeline that already exists.** A photo of a report
