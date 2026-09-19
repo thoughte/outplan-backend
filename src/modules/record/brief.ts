@@ -99,11 +99,15 @@ export async function buildBrief(userId: string): Promise<string | null> {
       const delta = Math.abs(latest.value - prior.value) / Math.max(Math.abs(prior.value), 0.001);
       if (delta >= MOVED) {
         const arrow = latest.value > prior.value ? 'up from' : 'down from';
-        line += ` — ${arrow} ${prior.value}${unit} on ${prior.collectedOn.toISOString().slice(0, 10)}`;
+        line += `, ${arrow} ${prior.value}${unit} on ${prior.collectedOn.toISOString().slice(0, 10)}`;
         moved = true;
       }
     }
-    lines.push({ line, core, moved: false });
+    // `moved` was hardcoded false here, so the second sort key never did
+    // anything: a marker that jumped 40% since the last draw ranked exactly
+    // level with one that had not moved at all, and past the 45 line cap the
+    // one that moved was as likely to be cut.
+    lines.push({ line, core, moved });
   }
   if (lines.length) {
     out.push('Most recent lab values, newest first. An arrow means it moved by more');
@@ -116,7 +120,10 @@ export async function buildBrief(userId: string): Promise<string | null> {
       Number(b.core) - Number(a.core) || Number(b.moved) - Number(a.moved));
     const CAP = 45;
     out.push(...lines.slice(0, CAP).map((l) => `  ${l.line}`));
-    if (lines.length > CAP) out.push(`  (+${lines.length - CAP} more on file, ask if you need them)`);
+    // Says what is there, never what to do about it. This used to read "ask if
+    // you need them", which is an instruction to ask sitting in the model's
+    // context on every turn, under a prompt that now says asking is rare.
+    if (lines.length > CAP) out.push(`  (+${lines.length - CAP} more on file)`);
     out.push('');
   }
 
@@ -143,13 +150,13 @@ export async function buildBrief(userId: string): Promise<string | null> {
     for (const i of daily) {
       const since = i.startedOn ? `, since ${i.startedOn.toISOString().slice(0, 10)}` : '';
       const when = i.schedule ? ` (${i.schedule})` : '';
-      out.push(`  ${i.name}${i.dose ? ` — ${i.dose}` : ''}${when}${since}`);
+      out.push(`  ${i.name}${i.dose ? `, ${i.dose}` : ''}${when}${since}`);
     }
     out.push('');
   }
   if (asNeeded.length) {
     out.push('Only when needed, not daily:');
-    for (const i of asNeeded) out.push(`  ${i.name}${i.dose ? ` — ${i.dose}` : ''}`);
+    for (const i of asNeeded) out.push(`  ${i.name}${i.dose ? `, ${i.dose}` : ''}`);
     out.push('');
   }
   if (undated.length) {

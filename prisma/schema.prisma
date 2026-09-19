@@ -194,6 +194,19 @@ model Exchange {
   coveredBy   Exchange?  @relation("covers", fields: [coveredById], references: [id], onDelete: SetNull)
   covers      Exchange[] @relation("covers")
 
+  /// This message answers the question asked in THAT exchange's reply.
+  ///
+  /// Set when he taps one of the offered options. Without it a tapped answer
+  /// arrives as a bare word: "Boiled" is stored as a message about nothing, the
+  /// extractor reads it as a message about nothing, and the assistant cannot
+  /// tell a tapped answer from a change of subject. It is also the only thing
+  /// that makes "close what you opened" checkable rather than aspirational,
+  /// because until now the assistant's own questions were the one side of the
+  /// conversation nothing tracked.
+  answeringId String?    @map("answering_id") @db.Uuid
+  answering   Exchange?  @relation("answers", fields: [answeringId], references: [id], onDelete: SetNull)
+  answers     Exchange[] @relation("answers")
+
   observations Observation[]
   goals        Goal[]
 

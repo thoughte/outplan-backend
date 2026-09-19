@@ -9,8 +9,10 @@ export interface ReplyQuestion {
 export interface ReplyParts {
   /** One to three short bubbles. Sent in sequence, the way a person types. */
   messages: string[];
-  /** At most one, and only when an answer would actually change what happens
-   *  next. Tappable options beat a paragraph listing possibilities. */
+  /** At most one, and rarely. The default reply carries none: for a long time
+   *  the prompt said "use it often" while this file said "only when it would
+   *  change what you say next", and the prompt won, which is how every reply
+   *  ended up with a question stapled to it. */
   question?: ReplyQuestion;
 }
 
@@ -32,8 +34,8 @@ const REPLY_TOOL = {
   name: 'reply',
   description:
     'Reply to the person. Break what you want to say into one to three short ' +
-    'messages, the way you would actually type them. Ask a question only when ' +
-    'the answer would change what you say next.',
+    'messages, the way you would actually type them. The default reply has NO ' +
+    'question in it: you react, you say what you think, and you stop.',
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -49,8 +51,12 @@ const REPLY_TOOL = {
       question: {
         type: 'object',
         description:
-          'Optional. Only when an answer changes what happens next, and never ' +
-          'more than one.',
+          'Usually leave this out. A question is earned only when your next ' +
+          'move genuinely forks on the answer: if you cannot name the two ' +
+          'different replies you would give, you have not earned it. If you ' +
+          'asked something in the last three or four replies, do not ask now, ' +
+          'however good the question is. Never more than one, and never one ' +
+          'here and another buried in the messages.',
         properties: {
           text: { type: 'string', description: 'The question, in one short line.' },
           options: {

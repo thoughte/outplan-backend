@@ -224,7 +224,7 @@ is the number everything else turns on.
 the conversation is him.
 
 ### `POST /api/v1/talk`
-Body: `{ "said": string }` → `201 { data: Exchange }`
+Body: `{ "said": string, "answering"?: uuid }` → `201 { data: Exchange }`
 
 - Several messages sent before any answer are answered **together**. The reply
   attaches to the newest, and the earlier ones carry `coveredById` pointing at
@@ -233,6 +233,13 @@ Body: `{ "said": string }` → `201 { data: Exchange }`
   costs the message.
 - After the reply is sent, the message is read for observations. Not before: it
   would double the wait for an answer.
+- `answering` is the exchange whose reply asked the question this answers. Send
+  it only when he **tapped** an offered option, never when he typed. A tapped
+  answer is sent as the option label alone, and "Boiled" on its own is half a
+  message: to the model it reads as a change of subject and to the extractor as
+  nothing at all. With the link, the question goes back in front of it for both.
+  It is checked against his own exchanges and ignored if it does not point at
+  one.
 
 ```jsonc
 { "id": "uuid", "said": "...", "replied": "...",
@@ -243,6 +250,14 @@ Body: `{ "said": string }` → `201 { data: Exchange }`
 
 `replyParts.messages` is one to three bubbles. A `question` has two to four
 options; one option is not a choice and is dropped rather than rendered.
+
+**Most replies have no question.** The prompt used to say "use it often" while
+the reply tool said "only when the answer would change what you say next", and
+the prompt won, so nearly every reply ended in one. It now says the opposite, and
+the rule is enforced here as well as asked for: if two of the last four replies
+already carried a question, the question is stripped and only the messages ship.
+Same argument as the red flags being a regex. A model can be talked out of a
+prompt rule and cannot be talked out of a check.
 
 ### `GET /api/v1/talk` · `GET /api/v1/talk/:id` · `GET /api/v1/talk/export`
 List (`?day=`, `?limit=`, `?cursor=`), one, and everything.

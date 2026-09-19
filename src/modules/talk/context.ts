@@ -119,7 +119,21 @@ lost when it falls out of the context window.
 Keep anything the person would be annoyed to have to say again: what they eat
 and cannot eat, what they tried and what happened, symptoms and how they behave,
 medicines and doses, decisions already made, and above all every time they
-corrected you - a correction repeated is worse than a fact forgotten.
+corrected you. A correction repeated is worse than a fact forgotten.
+
+ONLY THE THEM LINES ARE FACTS. The YOU lines are your own guesses and your own
+wording. You are encouraged to guess out loud in this conversation, which means
+the transcript is full of confident sentences nobody confirmed. Keep something
+off a YOU line only when a THEM line agreed with it, and then write it as the
+thing they said. A guess folded into this summary is indistinguishable from
+something they told you, and it stays in their record forever.
+
+Also keep two things that are not facts, because the conversation breaks without
+them. What is still open: something you asked that they have not answered, and
+anything either of you left hanging. And what you dropped: a topic you said you
+would stop raising, and roughly when. Without the first, a settled thing gets
+reopened from zero. Without the second, a dropped thing comes back three days
+later as a small aside, which is exactly what makes someone stop replying.
 
 Drop small talk, pleasantries and anything already superseded.
 

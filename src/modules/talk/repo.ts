@@ -7,8 +7,18 @@ export const talkRepo = {
   /** Store the words FIRST, before anything interprets them. Everything else on
    *  this row is derived and can be recomputed; the person's own sentence
    *  cannot. */
-  create: (data: { userId: string; said: string; localDay: string }): Promise<Exchange> =>
+  create: (data: { userId: string; said: string; localDay: string; answeringId?: string | null }): Promise<Exchange> =>
     prisma.exchange.create({ data }),
+
+  /** The question asked in a given exchange's reply, if that exchange is his
+   *  and it did ask one. Used to turn a tapped option back into a sentence. */
+  async askedIn(userId: string, id: string): Promise<string | null> {
+    const row = await prisma.exchange.findFirst({
+      where: { id, userId }, select: { replyParts: true },
+    });
+    const q = (row?.replyParts as { question?: { text?: unknown } } | null)?.question;
+    return q && typeof q.text === 'string' && q.text.trim() ? q.text.trim() : null;
+  },
 
   attachReply: (
     id: string,
@@ -37,6 +47,24 @@ export const talkRepo = {
       orderBy: { saidAt: 'asc' },
       take: limit,
       select: { id: true, said: true },
+    }),
+
+  /** The questions the ASSISTANT asked recently, newest first.
+   *
+   *  The mirror of `unanswered` above. That one tracks his messages that never
+   *  got a reply; this one tracks its own asks, which until now nothing
+   *  recorded at all. The prompt can be told not to ask twice in a row, but a
+   *  model reading a flattened transcript cannot see its own question as a
+   *  question: it arrives as an ordinary trailing sentence with the options
+   *  thrown away. "Do not ask if you asked recently" is unfollowable unless
+   *  somebody counts, so the server counts and states the number.
+   */
+  recentAsks: (userId: string, excludeId: string, limit: number) =>
+    prisma.exchange.findMany({
+      where: { userId, id: { not: excludeId }, repliedAt: { not: null } },
+      orderBy: { repliedAt: 'desc' },
+      take: limit,
+      select: { id: true, replyParts: true, said: true },
     }),
 
   /** Point earlier messages at the reply that answered them. */

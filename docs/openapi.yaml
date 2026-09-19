@@ -659,6 +659,22 @@ paths:
         to the newest and the earlier ones carry coveredById. The message is
         stored before reasoning is attempted, so a model outage never costs it.
         Refused for agent keys.
+
+        `answering` is the id of the exchange whose reply asked the question this
+        message answers. Send it ONLY when he tapped one of the offered options,
+        never when he typed. Without it a tapped answer arrives as a bare option
+        word with nothing to attach it to: "Boiled" is stored as a message about
+        nothing and the extractor reads it as a message about nothing. It is
+        checked against his own exchanges and ignored if it does not point at
+        one.
+
+        The reply carries a question far less often than it used to. The default
+        reply has none: a question is earned only when the next move genuinely
+        forks on the answer, and the server drops one outright if two of the last
+        four replies already carried a question. That ceiling is enforced here
+        rather than trusted to the prompt, for the same reason the red flags are
+        a regex: a model can be talked out of a rule and cannot be talked out of
+        a check. The messages always ship; only the question is dropped.
       requestBody:
         required: true
         content:
@@ -666,7 +682,9 @@ paths:
             schema:
               type: object
               required: [said]
-              properties: { said: { type: string, minLength: 1, maxLength: 8000 } }
+              properties:
+                said: { type: string, minLength: 1, maxLength: 8000 }
+                answering: { type: string, format: uuid }
       responses:
         '201':
           description: Stored, with a reply when one could be produced

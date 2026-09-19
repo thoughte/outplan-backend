@@ -3,6 +3,10 @@ import type { Correction, Exchange } from '../../../generated/prisma/client';
 
 export const createExchangeSchema = z.object({
   said: z.string().min(1, 'Say something first').max(8000),
+  /** The exchange whose reply asked the question this answers. Sent only when
+   *  he taps an offered option, never when he types. Ignored if it does not
+   *  point at one of his own exchanges. */
+  answering: z.string().uuid().optional(),
 });
 export type CreateExchangeInput = z.infer<typeof createExchangeSchema>;
 
@@ -29,6 +33,8 @@ export interface ExchangeResponse {
   /** Set when this message was answered as part of a later reply, because
    *  several arrived before any answer came back. Not unanswered. */
   coveredById: string | null;
+  /** The exchange this one answers, when he tapped an option rather than typed. */
+  answeringId: string | null;
   replied: string | null;
   /** { messages: string[], question?: { text, options[] } } - how to SHOW it. */
   replyParts: unknown;
@@ -48,6 +54,7 @@ export function toExchangeResponse(
     localDay: e.localDay,
     parsed: e.parsed,
     coveredById: e.coveredById,
+    answeringId: e.answeringId,
     replied: e.replied,
     replyParts: e.replyParts,
     repliedAt: e.repliedAt ? e.repliedAt.toISOString() : null,
