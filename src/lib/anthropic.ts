@@ -1,5 +1,6 @@
 import { ENV_CONFIG } from '../config/env.config';
 import { getSetting } from '../config/app.config';
+import { reasoningFailed, reasoningWorked } from './reasoning-health';
 
 export interface ReplyQuestion {
   text: string;
@@ -175,8 +176,15 @@ async function attemptReason(
 
     if (!res.ok) {
       // The body can carry the person's own words back in an error echo, so it
-      // is not logged. The status is enough to tell an outage from a bad key.
-      console.error('[reason] upstream returned', res.status);
+      // is not logged and its message is never stored. The service's own error
+      // TYPE is a fixed vocabulary of its own making, so that is safe and it is
+      // the part that distinguishes an expired credential from an overload.
+      let type: string | undefined;
+      try {
+        type = (JSON.parse(await res.text()) as { error?: { type?: string } }).error?.type;
+      } catch { /* not JSON */ }
+      console.error('[reason] upstream returned', res.status, type ?? '');
+      reasoningFailed({ status: res.status, type });
       return null;
     }
 
@@ -214,6 +222,7 @@ async function attemptReason(
     const text = final.messages.join('\n\n') +
       (final.question ? `\n\n${final.question.text}` : '');
 
+    reasoningWorked();
     return {
       parts: final,
       text,
@@ -223,8 +232,11 @@ async function attemptReason(
         ? { input: data.usage.input_tokens ?? 0, output: data.usage.output_tokens ?? 0 }
         : null,
     };
-  } catch {
-    return null;   // timeout, network, malformed JSON - all the same to the caller
+  } catch (e) {
+    // All the same to the caller, but not to anyone trying to work out why the
+    // app went quiet.
+    reasoningFailed({ status: 0, type: (e as Error).name });
+    return null;
   } finally {
     clearTimeout(timer);
   }
@@ -321,7 +333,11 @@ export async function reasonPlain(
       body: JSON.stringify({ model, max_tokens: opts.maxTokens ?? 1024, system, messages }),
       signal: ctl.signal,
     });
-    if (!res.ok) { console.error('[reasonPlain] upstream returned', res.status); return null; }
+    if (!res.ok) {
+      console.error('[reasonPlain] upstream returned', res.status);
+      reasoningFailed({ status: res.status });
+      return null;
+    }
     const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
     const text = (data.content ?? []).filter((b) => b.type === 'text' && b.text)
       .map((b) => b.text as string).join('\n').trim();

@@ -8,11 +8,21 @@ import { userRepo } from '../user/repo';
 import { localDay, clockFor } from '../../shared/helper';
 import { recordFrom } from '../record/extract';
 import { redFlag } from '../farm/safety';
+import { reasoningHealth } from '../../lib/reasoning-health';
 import { talkRepo } from './repo';
 import {
   toExchangeResponse,
   type CorrectInput, type CreateExchangeInput, type ExchangeResponse, type ListQuery,
 } from './types';
+
+/** Said when the reasoning service cannot be reached.
+ *
+ *  Plain, short, and not in the assistant's usual voice: it is the app speaking
+ *  about itself, not the assistant having a thought. It does not apologise
+ *  twice, does not explain infrastructure, and it makes clear the message was
+ *  kept, because the thing a person actually worries about is whether what they
+ *  just wrote is gone. */
+const COULD_NOT_ANSWER = 'I could not get through just now. What you wrote is saved, so say more when you want and I will pick it up.';
 
 /** How many recent replies are looked at, and how many of them may carry a
  *  question before the next one is refused. Four and two: a question in half of
@@ -211,6 +221,29 @@ export const talkService: TalkService = {
           model: result.model,
           promptVersion: `${prompt.key}@${prompt.version}`,
         });
+      } else {
+        // It could not answer. SAY SO.
+        //
+        // Before this, a failed call attached nothing: the message was stored
+        // with no reply and the screen showed it sitting there with nothing
+        // underneath, which is exactly what being ignored looks like. During a
+        // reasoning outage that happened to every message, for as long as the
+        // outage lasted, with no way for anyone to tell the difference between
+        // "this is broken" and "it read that and had nothing to say".
+        //
+        // His words are already safely stored by this point. This only fills in
+        // what sits under them.
+        const brain = reasoningHealth();
+        await talkRepo.attachReply(exchange.id, {
+          replied: COULD_NOT_ANSWER,
+          replyParts: { messages: [COULD_NOT_ANSWER] },
+          // Not a model and not a prompt version, because no model produced it.
+          // Anything reading back promptVersion to judge a reply must not find
+          // one here.
+          model: 'unavailable',
+          promptVersion: brain.status ? `unavailable:${brain.status}` : 'unavailable',
+        });
+        console.error('[talk] no reply produced; reasoning health:', JSON.stringify(brain));
       }
     }
 

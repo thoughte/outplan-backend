@@ -8,6 +8,7 @@ import { ENV_CONFIG } from './config/env.config';
 import { fingerprint } from './config/fingerprint';
 import { getSetting } from './config/app.config';
 import { authMiddleware, requireSession, peopleOnly } from './middleware/auth.middleware';
+import { reasoningHealth, looksLikeCredential } from './lib/reasoning-health';
 import { notFoundMiddleware, errorMiddleware } from './middleware/error.middleware';
 import { userController } from './modules/user/controller';
 import { authSessionController } from './modules/auth-session/controller';
@@ -61,13 +62,39 @@ export function setupAppRoutes(app: Express): void {
       ? (['database_url', 'firebase_service_account', 'anthropic_api_key'] as const)
       : (['database_url', 'firebase_service_account'] as const);
 
+    // Whether the reasoning service has actually been answering, as opposed to
+    // whether a key is set.
+    //
+    // This endpoint answered ok:true through a complete reasoning outage. The
+    // production credential is an OAuth session, it expired, and every call
+    // started coming back "Failed to authenticate: OAuth session expired and
+    // could not be refreshed". Chat replies, record extraction, conversation
+    // compaction and goal decomposition all stopped at once, and the only
+    // symptom anybody could see was messages that never got answered. The check
+    // here was that ANTHROPIC_API_KEY was present, which it was the whole time.
+    // A key being set is not the same claim as a service answering.
+    const reasoningState = reasoningHealth();
+    const brain = {
+      ...reasoningState,
+      // Named plainly, because the fix differs. A 429 or a 529 wants waiting; an
+      // expired credential wants a person to go and renew it.
+      needsNewCredential: looksLikeCredential(reasoningState),
+    };
+
+    // Deliberately does NOT gate `ok`.
+    //
+    // Marking the container unhealthy would have the platform restart it, and a
+    // restart cannot renew an expired OAuth session: it would crash-loop while
+    // reporting the wrong problem. The same reasoning as the files volume a few
+    // lines down. It is reported loudly and left to a human, which is the only
+    // thing that can actually fix it.
     const ok = db.up && db.migrated && required.every((k) => config[k].present);
     // The files volume is REPORTED but does not gate `ok`. Nothing serving a
     // conversation needs it, and marking the container unhealthy over storage
     // would have the platform restarting a service that is answering fine -
     // the same mistake as requiring an unused Anthropic key at boot.
     res.status(ok ? HttpStatusCode.Ok : HttpStatusCode.ServiceUnavailable).json({
-      ok, db, files, config, at: new Date().toISOString(),
+      ok, db, files, config, brain, at: new Date().toISOString(),
     });
   });
 

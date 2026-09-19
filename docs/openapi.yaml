@@ -193,6 +193,16 @@ paths:
         `ok` means "can serve", not "every variable is set". Secrets appear as
         fingerprints, never values. `files.ephemeral` true means writes vanish at
         the next deploy.
+
+        `brain` reports whether the reasoning service has actually been
+        ANSWERING, recorded from real calls rather than probed. It exists
+        because this endpoint answered ok:true through a total reasoning
+        outage: the production credential is an OAuth session, it expired, and
+        chat replies, record extraction, compaction and goal decomposition all
+        stopped at once while the key sat present in the environment.
+        `needsNewCredential` separates an expired credential, which needs a
+        person, from an overload, which needs waiting. It does not gate `ok`,
+        because restarting cannot renew a credential.
       responses:
         '200': { description: Serving }
         '503': { description: Cannot serve }
@@ -658,6 +668,9 @@ paths:
         Messages sent before any answer are answered together: the reply attaches
         to the newest and the earlier ones carry coveredById. The message is
         stored before reasoning is attempted, so a model outage never costs it.
+        When reasoning cannot be reached the reply is a plain line saying so,
+        with model "unavailable", rather than no reply at all: a message with
+        nothing under it is indistinguishable from being ignored.
         Refused for agent keys.
 
         `answering` is the id of the exchange whose reply asked the question this

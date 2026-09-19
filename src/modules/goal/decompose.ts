@@ -2,6 +2,7 @@ import { ENV_CONFIG } from '../../config/env.config';
 import { getSetting } from '../../config/app.config';
 import { prisma } from '../../lib/prisma';
 import { ASNEEDED } from '../record/brief';
+import { reasoningFailed, reasoningWorked } from '../../lib/reasoning-health';
 
 /** Break something he wants into pieces small enough to finish.
  *
@@ -296,6 +297,7 @@ export async function draft(userId: string, intent: string): Promise<DraftResult
         type = parsed.error?.type;
         message = parsed.error?.message;
       } catch { /* not JSON, the status alone will have to do */ }
+      reasoningFailed({ status: res.status, type, message });
       return { goals: [], failure: 'upstream', upstream: { status: res.status, type, message } };
     }
     const data = (await res.json()) as {
@@ -317,6 +319,7 @@ export async function draft(userId: string, intent: string): Promise<DraftResult
       return { goals: [], failure: 'empty', stopReason: data.stop_reason ?? null };
     }
     console.log(`[goals] "${intent}" broke into ${cleaned.length} top-level (stop_reason ${data.stop_reason})`);
+    reasoningWorked();
     return { goals: cleaned, stopReason: data.stop_reason ?? null };
   } catch (e) {
     const aborted = (e as Error).name === 'AbortError';

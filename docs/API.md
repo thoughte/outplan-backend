@@ -51,12 +51,32 @@ No auth. Returns whether this process can do its job.
   "files": { "path": "/data/files", "mounted": true, "writable": true,
              "ephemeral": false, "freeMb": 1523276,
              "firstSeen": "2026-09-18T05:59:42Z", "boots": 19 },
-  "config": { "database_url": { "present": true, "chars": 122, "fp": "2a399cfe4095" } } }
+  "config": { "database_url": { "present": true, "chars": 122, "fp": "2a399cfe4095" } },
+  "brain":  { "ok": false, "at": "2026-09-19T18:40:11Z", "failures": 3,
+              "status": 500, "type": "api_error", "needsNewCredential": true } }
 ```
 
 `ok` means "can serve", not "every variable is set" - the Anthropic key is only
 required when reasoning is on, and failing the check over an unused key has the
 platform restarting a working container.
+
+`brain` is whether the reasoning service has actually been ANSWERING, which is a
+different claim from a key being set. It is recorded from real calls rather than
+probed, so `ok: null` means nothing has asked it yet on this boot.
+
+It exists because this endpoint answered `ok: true` right through a total
+reasoning outage. The production credential is an OAuth session, it expired, and
+every call came back `Failed to authenticate: OAuth session expired and could
+not be refreshed`. Chat replies, record extraction, conversation compaction and
+goal decomposition all stopped at once. The check was that `ANTHROPIC_API_KEY`
+was present, and it was, the entire time.
+
+`needsNewCredential` separates the two cases that need opposite responses: a 429
+or a 529 wants waiting, an expired credential wants a person to go and renew it.
+
+`brain` deliberately does NOT gate `ok`. Restarting cannot renew an expired
+credential, so failing the healthcheck would crash-loop the container while
+reporting the wrong problem - the same reasoning as the files volume below.
 
 `files.ephemeral: true` means writes succeed and vanish at the next deploy: the
 directory exists in the image and no volume is mounted over it. `boots` climbing
@@ -233,6 +253,11 @@ Body: `{ "said": string, "answering"?: uuid }` → `201 { data: Exchange }`
   costs the message.
 - After the reply is sent, the message is read for observations. Not before: it
   would double the wait for an answer.
+- **If the reasoning service cannot be reached, a plain reply says so** rather
+  than leaving the message with nothing under it. `model` is `unavailable` and
+  `promptVersion` is `unavailable:<status>`, so nothing reading back a prompt
+  version to judge a reply will find one. This is not cosmetic: during a
+  reasoning outage every message looked exactly like being ignored.
 - `answering` is the exchange whose reply asked the question this answers. Send
   it only when he **tapped** an offered option, never when he typed. A tapped
   answer is sent as the option label alone, and "Boiled" on its own is half a
