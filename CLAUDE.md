@@ -313,6 +313,25 @@ One difference is expected and cannot be removed: the covering index on
 `measurements` uses `INCLUDE`, which Prisma cannot express. Anything else
 appearing here is drift worth fixing.
 
+## One goal is counted once
+
+    npm run goals:dupes <email>          list
+    npm run goals:dupes <email> -- --fix merge
+
+Two goals are the same when they watch the same `measure` in the same
+`direction` AND both are about moving the number rather than measuring it again.
+The save path in `goal/decompose.ts` prevents new ones; this finds any that get
+through.
+
+It matters because the scoreboard is a COUNT. "28 goals this year" is only
+checkable if one achievement is one row, and four intents decomposed
+independently produced fourteen duplicates, two of them already active and both
+counting.
+
+Read it read-only first. The first run over his record would have merged "Recheck
+ApoB on a fixed schedule" into "Bring ApoB into optimal range" and deleted the
+reminder to go and test.
+
 ## Every feature gets a plan file first
 
 `docs/features/<slug>.md`, written and agreed BEFORE any code. See

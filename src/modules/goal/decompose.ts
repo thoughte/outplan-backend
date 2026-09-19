@@ -62,7 +62,11 @@ const TOOL = {
             type: 'string', enum: ['outcome', 'behaviour', 'container'],
             description:
             'outcome = a number to move. behaviour = something done or not done each day. ' +
-            'container = holds other goals and has no measure of its own.',
+            'container = holds other goals and has no measure of its own. ' +
+            'GOING AND MEASURING SOMETHING AGAIN IS A BEHAVIOUR, NOT AN OUTCOME. ' +
+            '"Recheck ApoB in three months" is a thing he does; "Get ApoB under 90" is ' +
+            'the number. Do not give a recheck the marker as its measure, or it becomes ' +
+            'indistinguishable from the goal to move that marker.',
             },
             why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
             inferred: { type: 'boolean', description: 'Usually FALSE. False when you are restating the record or their own request in smaller pieces, including baselines and rechecks. True only when you supplied an idea the record does not contain, such as naming a cause nobody wrote down. If unsure, false.' },
@@ -89,7 +93,10 @@ const TOOL = {
                   type: 'string', enum: ['outcome', 'behaviour', 'container'],
                   description:
                   'outcome = a number to move. behaviour = something done or not done each day. ' +
-                  'container = holds other goals and has no measure of its own.',
+                  'container = holds other goals and has no measure of its own.' +
+                  'GOING AND MEASURING SOMETHING AGAIN IS A BEHAVIOUR. "Recheck ApoB in three ' +
+                  'months" is a thing he does; "Get ApoB under 90" is the number. A recheck ' +
+                  'must NOT carry the marker as its measure.',
                   },
                   why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
                   inferred: { type: 'boolean', description: 'Usually FALSE. False when you are restating the record or their own request in smaller pieces, including baselines and rechecks. True only when you supplied an idea the record does not contain, such as naming a cause nobody wrote down. If unsure, false.' },
@@ -116,7 +123,10 @@ const TOOL = {
                         type: 'string', enum: ['outcome', 'behaviour', 'container'],
                         description:
                         'outcome = a number to move. behaviour = something done or not done each day. ' +
-                        'container = holds other goals and has no measure of its own.',
+                        'container = holds other goals and has no measure of its own.' +
+                  'GOING AND MEASURING SOMETHING AGAIN IS A BEHAVIOUR. "Recheck ApoB in three ' +
+                  'months" is a thing he does; "Get ApoB under 90" is the number. A recheck ' +
+                  'must NOT carry the marker as its measure.',
                         },
                         why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
                         inferred: { type: 'boolean', description: 'Usually FALSE. False when you are restating the record or their own request in smaller pieces, including baselines and rechecks. True only when you supplied an idea the record does not contain, such as naming a cause nobody wrote down. If unsure, false.' },
@@ -169,6 +179,15 @@ const SYSTEM = [
   'Never write a goal that says to stop, skip or reduce a prescribed medicine. That is',
   'not yours to say, and it is not what he is asking for anyway: he is asking to fix the',
   'thing that made the medicine necessary.',
+  '',
+  'RECHECKING A NUMBER IS A BEHAVIOUR, NOT AN OUTCOME. "Recheck ApoB in three months" is',
+  'something he does. "Get ApoB under 90" is the number moving. They are different goals and',
+  'both are worth having, so give the recheck NO measure: if it carries the marker it becomes',
+  'indistinguishable from the goal to move that marker, and one of the two gets lost.',
+  '',
+  'DO NOT WRITE A GOAL HE ALREADY HAS. The list above of what he already has is there so you',
+  'can spend your slots on what is missing. If an existing goal belongs under what he is',
+  'asking for now, say so in the `why` of the goal above it instead of repeating it.',
   '',
   'SAY WHICH GOALS YOU REASONED YOUR WAY TO. Every goal takes `inferred` and you must set',
   'it on every one.',
@@ -224,6 +243,14 @@ async function context(userId: string): Promise<string> {
   const symptoms = await prisma.symptom.findMany({
     where: { userId, status: { not: 'resolved' } }, select: { name: true, status: true },
   });
+  // What he already has. Not a guard, the save is the guard: this is so a slot
+  // is not spent re-deriving a goal that exists. Eight top-level slots is not
+  // many, and two of them went on uric acid and CRP the last time.
+  const already = await prisma.goal.findMany({
+    where: { userId, measure: { not: null }, status: { not: 'abandoned' } },
+    select: { title: true, measure: true, direction: true },
+    take: 200,
+  });
 
   return [
     'MEDICINES HE TAKES EVERY DAY, and why each was started. These are the ones',
@@ -248,6 +275,13 @@ async function context(userId: string): Promise<string> {
     '',
     'OPEN SYMPTOMS:',
     ...symptoms.map((s) => `  ${s.name} (${s.status})`),
+    ...(already.length ? [
+      '',
+      'GOALS HE ALREADY HAS. Do not write these again. If one of them belongs under',
+      'what he is asking for now, say so in the `why` of the goal above it rather than',
+      'repeating the goal. Spend your slots on what is not here yet:',
+      ...already.map((g) => `  ${g.title} (${g.measure}, ${g.direction})`),
+    ] : []),
   ].join('\n');
 }
 
@@ -419,14 +453,77 @@ function clean(nodes: unknown): Drafted[] {
  *  Proposed, never active. Nothing becomes a goal because a model suggested it;
  *  he confirms, and until he does it is a suggestion sitting quietly.
  */
+/** A goal about MEASURING a number again, not about moving it.
+ *
+ *  "Recheck ApoB on a fixed schedule" and "Bring ApoB into optimal range" share
+ *  a measure and a direction and are not the same goal at all: one is a thing
+ *  you do, the other is a number that has to move. Merging them would delete a
+ *  real goal and leave the person with no reminder to go and test.
+ *
+ *  Found by running the deduplication over his actual record, where it would
+ *  have swallowed three of these.
+ *
+ *  This is a guard on the merge, not the fix. The fix is upstream, in the
+ *  prompt: rechecking is a behaviour, and a behaviour has no measure to collide
+ *  on. The guard stays because a prompt is advice and this is a deletion.
+ */
+export const RECHECK = /\brecheck|\bre-check|\bretest|\bre-test|\bconfirm\b.*\bhold|\bon a fixed schedule|\bmeasure\b.*\bagain/i;
+
+/** Goals he already has that watch a number, keyed by what they watch.
+ *
+ *  `measure` plus `direction` is the honest identity of an outcome goal. Titles
+ *  are the model's wording and drift between calls: the same goal came back as
+ *  "Bring uric acid down" twice by luck, and would not have next time. A
+ *  variable name comes out of his own record and does not move.
+ *
+ *  Abandoned goals are excluded on purpose. He said no to that one, and a later
+ *  intent raising it again is a new question he is allowed to answer differently.
+ */
+async function liveByMeasure(userId: string) {
+  const rows = await prisma.goal.findMany({
+    where: { userId, measure: { not: null }, status: { not: 'abandoned' } },
+    select: { id: true, title: true, measure: true, direction: true, targetValue: true, why: true, inferred: true },
+  });
+  const map = new Map<string, (typeof rows)[number]>();
+  // Rechecks are keyed separately so they never collide with the outcome goal
+  // for the same marker.
+  for (const r of rows) map.set(keyOf(r.measure, r.direction, r.title), r);
+  return map;
+}
+
+/** The identity of a measured goal: what it watches, which way, and whether it
+ *  is about moving the number or going and measuring it again. */
+export function keyOf(measure: string | null, direction: string, title: string): string {
+  return `${measure}|${direction}|${RECHECK.test(title) ? 'recheck' : 'move'}`;
+}
+
 export async function save(
   userId: string, intent: string, exchangeId: string | null, drafted: Drafted[],
 ): Promise<number> {
   const byTitle = new Map<string, string>();
+  const existing = await liveByMeasure(userId);
   let count = 0;
+  let merged = 0;
 
   const walk = async (nodes: Drafted[], parentId: string | null): Promise<void> => {
     for (const n of nodes) {
+      // Already have this one? Merge into it rather than writing a second row.
+      //
+      // THIS is the guard, not the instruction in the prompt. A model can be
+      // talked out of "do not re-propose these" and cannot be talked out of a
+      // lookup, which is the same argument the red flags already make.
+      const key = n.measure ? keyOf(n.measure, n.direction ?? 'down', n.title) : null;
+      const already = key ? existing.get(key) : undefined;
+      if (already) {
+        await mergeInto(already, n, intent);
+        merged++;
+        byTitle.set(n.title, already.id);
+        // Its children still get walked, under the goal that survived. A later
+        // draft can legitimately break an existing goal down further.
+        if (n.children?.length) await walk(n.children, already.id);
+        continue;
+      }
+
       const baseline = n.kind === 'outcome' && n.measure
         ? await prisma.measurement.findFirst({
             where: { userId, variable: n.measure, canonicalValue: { not: null } },
@@ -460,6 +557,12 @@ export async function save(
         },
       });
       byTitle.set(n.title, g.id);
+      // Registered immediately, so a tree that proposes the same measure twice
+      // within ONE call collapses too, not only across calls.
+      if (n.measure) existing.set(keyOf(n.measure, n.direction ?? 'down', n.title), {
+        id: g.id, title: g.title, measure: g.measure, direction: g.direction,
+        targetValue: g.targetValue, why: g.why, inferred: g.inferred,
+      });
       count++;
       if (n.children?.length) await walk(n.children, g.id);
     }
@@ -484,5 +587,46 @@ export async function save(
   };
   await link(drafted);
 
+  if (merged) console.log(`[goals] "${intent}" merged into ${merged} goal(s) that already existed`);
   return count;
+}
+
+/** Fold a later draft into the goal that already exists.
+ *
+ *  Only ever adds. An existing target is never overwritten by a later call,
+ *  because the first one was the answer to the question he actually asked; a
+ *  missing one is filled in, because a goal with a target is strictly more than
+ *  a goal without.
+ *
+ *  `inferred` takes the CAUTIOUS value. CRP arrived once marked reasoned-to and
+ *  once not, and if either call thought it was an inference it stays one. An
+ *  inference must not be able to launder itself into a fact by being proposed a
+ *  second time.
+ */
+async function mergeInto(
+  existing: { id: string; targetValue: number | null; why: string | null; inferred: boolean },
+  n: Drafted,
+  intent: string,
+): Promise<void> {
+  const target = existing.targetValue == null && typeof n.targetValue === 'number'
+    ? n.targetValue : undefined;
+
+  // Says the connection out loud rather than keeping a second row for it. He
+  // should be able to see that uric acid came up for two different reasons.
+  const note = `Also came up when you said "${intent}".`;
+  const why = existing.why?.includes(note)
+    ? undefined
+    : `${existing.why ? `${existing.why} ` : ''}${note}`.slice(0, 300);
+
+  const inferred = existing.inferred || n.inferred === true;
+
+  if (target === undefined && why === undefined && inferred === existing.inferred) return;
+  await prisma.goal.update({
+    where: { id: existing.id },
+    data: {
+      ...(target !== undefined ? { targetValue: target } : {}),
+      ...(why !== undefined ? { why } : {}),
+      ...(inferred !== existing.inferred ? { inferred } : {}),
+    },
+  });
 }

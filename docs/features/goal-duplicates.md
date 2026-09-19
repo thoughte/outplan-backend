@@ -1,6 +1,6 @@
 # One goal, counted once
 
-Status: building, 19 Sep 2026.
+Status: **built and applied to his record**, 19 Sep 2026.
 
 ## His words
 
@@ -106,3 +106,55 @@ that the two known pairs become one goal each; that the survivor carries the
 target from whichever copy had one; that CRP stays marked inferred; that the
 total drops by exactly two; and that `GET /goals` afterwards reports no title
 appearing twice.
+
+---
+
+## What the build found that the plan did not
+
+**It was fourteen, not two.** Title matching found two. Keying on `measure` plus
+`direction` found seventeen, and the extra ones are exactly the cases title
+matching cannot see: "Reduce weight toward target" and "Bring weight down",
+"Raise HDL cholesterol" and "Raise HDL", "Keep nafld_fibrosis_score in the
+low-risk band" and "Keep NAFLD fibrosis score in the low-risk band". Two of them
+were already ACTIVE, both counting, which is the scoreboard failure this was
+written to prevent happening in the present tense rather than the future.
+
+**Three of the seventeen were not duplicates at all.** Running it read-only
+first, before anything was written, caught this:
+
+- `apo_b` down: "Bring ApoB into optimal range" and "Recheck ApoB on a fixed schedule"
+- `homocysteine` down: "Bring homocysteine into normal range" and "Confirm B12 and homocysteine hold on retest"
+- `testosterone_total` up: "Raise total testosterone" and "Recheck testosterone_total once alcohol has been out"
+
+A recheck shares a marker and a direction with the goal to move that marker and
+is a completely different thing: one is something he does, the other is a number
+that has to move. Merging them would have deleted his only reminder to go and
+test. The identity is now three parts, not two, and the third is whether the goal
+is about moving the number or measuring it again.
+
+The root cause is upstream: a recheck is a BEHAVIOUR and should never have
+carried the marker as its `measure`. That is now said in the system prompt and
+at all three schema levels. The guard in `keyOf` stays anyway, because a prompt
+is advice and this code deletes things.
+
+**Nothing is deleted.** The plan said merge; the implementation marks the
+duplicate `abandoned` instead. This codebase already holds that rule for goals,
+"a goal that vanishes takes the reason it existed with it", and it applies twice
+over when the merge is my judgement about rows in his health record rather than
+his. Abandoned goals are excluded from every count and from the duplicate key, so
+the numbers are right either way, and if two things were merged that were not the
+same, the evidence survives.
+
+## The result, on his record
+
+| | before | after |
+|---|---:|---:|
+| measured goals | 54 | 32 |
+| goals in total | 142 | 120 |
+| proposals waiting on him | 62 | 41 |
+| duplicated | 14 | 0 |
+| rechecks | 4 | 4 |
+
+Branch counts afterwards: Go meds free 47, Sleep on time 30, Stop alcohol 19,
+Lose inches 20. The last two shrank because their copies folded into the older
+branches, which is the point: one goal, counted once.
