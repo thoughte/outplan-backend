@@ -1,7 +1,9 @@
 # Grove: the farm, on top of outplan
 
-Status: **planned, not started.** Supersedes `goals-view.md`, which planned a
-gamified goals screen. The farm is that screen, and more.
+Status: **first slice built and live**, 19 Sep 2026: the farm as a view over the
+record, plus the observation amounts it needed underneath. Everything else in
+this plan is still ahead - quests from behaviour goals, the record confirmation
+step, roots as their own surface, the quiz, neighbours, care circle, billing.
 
 ## What he asked for
 

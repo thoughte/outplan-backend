@@ -1,6 +1,8 @@
 # Knowing what time it is
 
-Status: **planned, not started.**
+Status: **built and live**, 19 Sep 2026. The local date, time and weekday go
+into every message, and where the zone is unknown the model is told to say so
+rather than guess. The timezone half was superseded by `account-setup.md`.
 
 ## What he asked for
 

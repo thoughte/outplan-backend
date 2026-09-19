@@ -1,7 +1,8 @@
 # Account setup: name, date of birth, city
 
-Status: **planned, not started.** Supersedes the timezone half of
-`knowing-the-time.md`, which assumed the browser would be the source.
+Status: **built and live**, 19 Sep 2026. Name and date of birth are asked for;
+the city question was removed the same day and is now a PLANNED item (see
+`PLANNED.md`), with the clock taken from the device in the meantime.
 
 ## What he asked for
 
