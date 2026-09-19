@@ -9,6 +9,7 @@ import { localDay, clockFor } from '../../shared/helper';
 import { recordFrom } from '../record/extract';
 import { redFlag } from '../farm/safety';
 import { reasoningHealth } from '../../lib/reasoning-health';
+import { prisma } from '../../lib/prisma';
 import { talkRepo } from './repo';
 import {
   toExchangeResponse,
@@ -53,6 +54,7 @@ function stripQuestion(text: string, question?: { text: string }): string {
 
 export interface TalkService {
   say(userId: string, input: CreateExchangeInput): Promise<ExchangeResponse>;
+  unrecord(userId: string, id: string): Promise<ExchangeResponse>;
   list(userId: string, q: ListQuery): Promise<ExchangeResponse[]>;
   one(userId: string, id: string): Promise<ExchangeResponse>;
   correct(userId: string, id: string, input: CorrectInput): Promise<ExchangeResponse>;
@@ -291,6 +293,45 @@ export const talkService: TalkService = {
    *  the original destroys the half that is hard to get, and that half is the
    *  only data here that cannot be bought.
    */
+  /** Take back what was read from a message.
+   *
+   *  Undo, not approval. His words are stored the instant he sends them and an
+   *  observation derived from them can always be rebuilt, so the extraction is
+   *  written straight away and shown on the message that produced it. Asking
+   *  first would tax every correct reading to catch the rare wrong one, and it
+   *  would be another question, which is the thing he has told me to stop.
+   *
+   *  The message itself is never touched. Only what was inferred from it.
+   */
+  async unrecord(userId, id) {
+    const exchange = await prisma.exchange.findFirst({ where: { id, userId }, select: { id: true } });
+    if (!exchange) throw notFound('No such message');
+
+    const written = await prisma.observation.findMany({
+      where: { exchangeId: id, userId }, select: { id: true },
+    });
+    const ids = written.map((o) => o.id);
+
+    await prisma.$transaction([
+      // The plan tick goes with it, or the record and the plan disagree and the
+      // plan is the one he looks at. `doneVia: 'said'` items carry the
+      // observation they came from precisely so this is possible.
+      ...(ids.length
+        ? [prisma.planItem.updateMany({
+            where: { userId, observationId: { in: ids } },
+            data: { status: 'pending', doneAt: null, doneVia: null, observationId: null },
+          })]
+        : []),
+      prisma.observation.deleteMany({ where: { exchangeId: id, userId } }),
+      // Empty array, never null. "Read, and nothing in it" and "not looked at
+      // yet" are different facts and this codebase keeps them apart.
+      prisma.exchange.update({ where: { id }, data: { parsed: [] } }),
+    ]);
+
+    console.log(`[record] removed ${ids.length} observation(s) read from one message`);
+    return this.one(userId, id);
+  },
+
   async correct(userId, id, input) {
     const row = await talkRepo.findOwned(id, userId);
     if (!row) throw notFound('No such entry');

@@ -184,6 +184,7 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.talk.base, talkController.list);
   app.get(API_PREFIX + ALL_ROUTES.talk.one, talkController.one);
   app.post(API_PREFIX + ALL_ROUTES.talk.correct, talkController.correct);
+  app.delete(API_PREFIX + ALL_ROUTES.talk.record, talkController.unrecord);
 
   // --- ADMIN BOUNDARY -----------------------------------------------------
   // app.use(API_PREFIX + '/admin', requireRole('admin'));

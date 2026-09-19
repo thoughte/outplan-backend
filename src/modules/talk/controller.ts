@@ -15,6 +15,22 @@ export const talkController = {
     } catch (e) { next(e); }
   },
 
+  /**
+   * DELETE /api/v1/talk/:id/record
+   * Take back what was read from one message. The message itself is untouched.
+   * Params:
+   *  - id: string
+   * Middleware:
+   *  - authenticated, his own exchanges only, agent keys refused (peopleOnly)
+   */
+  async unrecord(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw unauthorized();
+      const data = await talkService.unrecord(req.user.id, req.params.id as string);
+      res.status(HttpStatusCode.Ok).json({ ok: true, data });
+    } catch (e) { next(e); }
+  },
+
   async list(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) throw unauthorized();

@@ -287,6 +287,23 @@ prompt rule and cannot be talked out of a check.
 ### `GET /api/v1/talk` · `GET /api/v1/talk/:id` · `GET /api/v1/talk/export`
 List (`?day=`, `?limit=`, `?cursor=`), one, and everything.
 
+### `DELETE /api/v1/talk/:id/record`
+→ `200 { data: Exchange }`
+
+Removes every observation read from that message, and un-ticks any day-plan item
+marked done from one of them. The message is never touched.
+
+**Undo, not approval.** Extraction writes as soon as the reply is sent, because
+his words are already stored and anything inferred from them can be rebuilt.
+Asking first would tax every correct reading to catch the rare wrong one. So what
+was recorded is shown on the message that produced it, and one tap removes it.
+
+The plan tick goes with it because `PlanItem.observationId` records which
+observation ticked it. Without that the record and the plan would disagree, and
+the plan is the one he looks at.
+
+Safe to call twice. `parsed` becomes `[]`, never null.
+
 ### `POST /api/v1/talk/:id/correct`
 Body: `{ "wasWrong": string, "isRight"?: string, "domain"?: string }`
 A correction is not an edit. Both versions stay, and the correction is replayed

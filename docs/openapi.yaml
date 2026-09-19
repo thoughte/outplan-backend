@@ -732,6 +732,31 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '200': { description: One exchange } }
 
+  /api/v1/talk/{id}/record:
+    delete:
+      tags: [talk]
+      summary: Take back what was read from a message
+      description: >
+        Removes every observation extracted from that one message, and un-ticks
+        any day-plan item that was marked done from one of them. The message
+        itself is never touched: his words are the record, and what was inferred
+        from them is not.
+
+        This is UNDO, not approval. Extraction runs after the reply is sent and
+        writes straight away, because his words are already stored and an
+        observation derived from them can always be rebuilt. Asking before every
+        logged meal would tax every correct reading to catch the rare wrong one,
+        and it would be another question.
+
+        `parsed` is set to an empty array rather than null afterwards. "Read, and
+        nothing in it" and "not looked at yet" are different facts.
+
+        Safe to call twice. Refused for agent keys, like the rest of /talk.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: The exchange, with parsed now empty }
+        '404': { description: No such message }
+
   /api/v1/talk/{id}/correct:
     post:
       tags: [talk]

@@ -65,5 +65,6 @@ export const ALL_ROUTES = {
     export: '/talk/export',
     one: '/talk/:id',
     correct: '/talk/:id/correct',
+    record: '/talk/:id/record',
   },
 } as const;
