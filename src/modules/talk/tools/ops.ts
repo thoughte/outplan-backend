@@ -25,8 +25,10 @@ const readRecord = defineOp({
   name: 'read_record',
   description:
     'What is already known about this person: their markers and recent direction, '
-    + 'open symptoms, and what they take daily versus only when needed. Read this '
-    + 'before answering anything about their health rather than guessing.',
+    + 'open symptoms, and what they take daily versus only when needed. Call it '
+    + 'before answering anything about THEIR health rather than guessing. '
+    + 'Not for questions about the app, and not for general questions that are not '
+    + 'about them.',
   schema: z.object({}),
   run: async (_input, ctx) => {
     const brief = await buildBrief(ctx.userId);
@@ -39,8 +41,9 @@ const readPlan = defineOp({
   name: 'read_today',
   description:
     "Today's plan: what they are meant to do, what is already ticked off, and the "
-    + 'id of each item. Read this before marking anything done, because marking '
-    + 'needs the id and guessing at one is how the wrong thing gets ticked.',
+    + 'id of each item. Call it before marking anything done, because marking needs '
+    + 'the id and guessing at one is how the wrong thing gets ticked. Not for '
+    + 'questions about how the plan feature works.',
   schema: z.object({}),
   run: async (_input, ctx) => {
     const day = await planFor(ctx.userId, ctx.localDay);
@@ -52,9 +55,13 @@ const readGoals = defineOp({
   tier: 'free',
   name: 'read_goals',
   description:
-    'Their goals as a tree, with how each one stands and how many are finished '
-    + 'this month and this year. Read it before talking about progress or before '
-    + 'confirming or dropping anything, because both need an id.',
+    'Their goals: what each is, where it sits, how it stands, and how many are '
+    + 'finished this month and this year. Call it when you are about to confirm or '
+    + 'drop one, because both need an id, or when they ask how something of theirs '
+    + 'is going. '
+    + 'DO NOT call it to answer a question about how the app works. "How do I create '
+    + 'a goal" is answered in words; reading their goals answers a question they did '
+    + 'not ask.',
   schema: z.object({}),
   run: async (_input, ctx) => {
     const [goals, score] = await Promise.all([tree(ctx.userId), scoreboard(ctx.userId)]);

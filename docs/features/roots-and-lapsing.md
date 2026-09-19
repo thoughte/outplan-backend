@@ -2,7 +2,7 @@
 
 Status: building, 19 Sep 2026.
 
-In the app: Roots, on the farm: how much is known about them. Markers measured, symptoms, medicines, how far back it reaches. Never any values.
+In the app: Roots, at the bottom of the Farm screen: how much is known about them. Markers measured, symptoms, medicines, how far back it reaches. Never any values.
 
 Two of the three Grove pieces left on the list. The third, seasons, is at the
 bottom with the reason it is not being built.

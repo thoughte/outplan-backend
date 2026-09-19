@@ -2,7 +2,7 @@
 
 Status: building, 19 Sep 2026.
 
-In the app: The farm has a tree quiz on first open, neighbours who see only earned rewards, and a care circle in Settings for letting someone see how they are doing.
+In the app: The farm has a tree quiz on first open and a Neighbours link inside it, where a neighbour sees only earned rewards. The care circle, for letting someone see how they are doing, is in Settings under Sharing.
 
 The backend for this shipped in `120a6fa`. This is the half a person can see.
 

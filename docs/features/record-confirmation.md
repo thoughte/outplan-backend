@@ -2,7 +2,7 @@
 
 Status: building, 19 Sep 2026.
 
-In the app: Anything read out of a message shows under it as one line, with "not right" to remove it. Removing it also unticks whatever it ticked on the day plan.
+In the app: Anything read out of a message shows under it in the chat as one grey line, with "not right" beside it to remove it. Removing it also unticks whatever it ticked on the day plan.
 
 ## Where this came from
 

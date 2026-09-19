@@ -2,7 +2,7 @@
 
 Status: **backend live since 17 Sep. Screen being built 19 Sep 2026.**
 
-In the app: Goals: what they want to change, broken into small finishable pieces. Shows how many were finished this month and this year. Proposals wait there until confirmed.
+In the app: Goals, from the Goals card on the home screen: what they want to change, broken into small finishable pieces. Proposals sit at the top under "Waiting on you" until confirmed. Shows how many were finished this month and this year.
 
 Marked superseded once, wrongly. The farm took over the *daily* gamified surface
 and that was right, but the farm shows habits this week and it cannot show a goal

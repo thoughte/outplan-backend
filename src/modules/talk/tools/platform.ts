@@ -55,11 +55,22 @@ export async function platformNotes(dir = 'docs/features'): Promise<string> {
 
     cached = entries.length
       ? [
-          'WHAT THIS APP CAN DO. Someone asking how to use it should get a real',
-          'answer, not a guess. If a surface below does what they are asking for,',
-          'say so and say where it is. If nothing here does it, say that plainly',
-          'rather than inventing a feature, because a person going to look for a',
-          'screen that does not exist is worse off than one who was told no.',
+          'WHAT THIS APP CAN DO.',
+          '',
+          'A HOW-TO QUESTION IS ANSWERED FROM THIS LIST AND NOTHING ELSE. "How do I',
+          'create a goal", "where do I see my records", "can I add a photo" are questions',
+          'about the app, not about them. Do NOT read their record to answer one. He asked',
+          'how to create a goal and got his existing goals read back at him, which',
+          'answered a question he had not asked and cost him a page of his own data he',
+          'did not want to see.',
+          '',
+          'Answer one in two lines: where the screen is, and that you can do it from here',
+          'if he would rather just say it. Both, because he may not want to leave the',
+          'conversation and he may not want you doing it for him either.',
+          '',
+          'If nothing below does what he is asking for, say so plainly rather than',
+          'inventing a feature. Someone sent looking for a screen that does not exist is',
+          'worse off than someone who was told no.',
           '',
           ...entries.map((e) => `  ${e}`),
         ].join('\n')

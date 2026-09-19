@@ -5,7 +5,7 @@ record, plus the observation amounts it needed underneath. Everything else in
 this plan is still ahead - quests from behaviour goals, the record confirmation
 step, roots as their own surface, the quiz, neighbours, care circle, billing.
 
-In the app: The farm: a tree that reflects what they actually logged this week. Water, movement, meals, sleep, doses. It never shows results from a report and nothing on it dies.
+In the app: The farm, from the Farm card on the home screen: a tree reflecting what they logged this week. Water, movement, meals, sleep, doses. It never shows results from a report and nothing on it dies.
 
 ## What he asked for
 

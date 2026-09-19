@@ -2,7 +2,7 @@
 
 Status: planning, 19 Sep 2026.
 
-In the app: The chat can read their record and do things for them: log what they did, tick the day plan, confirm or drop a goal, take a file. Anything it writes shows in the reply and can be undone.
+In the app: In the chat they can attach a file with the paperclip, and can just say what they want: log something, tick the day plan, create a goal, confirm or drop one. Anything the assistant does shows under their message with an undo beside it.
 
 ## His words
 
