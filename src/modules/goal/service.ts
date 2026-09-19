@@ -90,23 +90,39 @@ export async function tree(userId: string): Promise<GoalNode[]> {
   const build = (parentId: string | null): GoalNode[] =>
     (byParent.get(parentId) ?? []).map((g) => {
       const children = build(g.id);
+      // A container is judged on its LIVE children only.
+      //
+      // Deduplicating the leaves marked fourteen duplicates abandoned, and every
+      // container above one of them started reporting on rows that are no longer
+      // anybody's goal: "0 of 4 finished" where three of the four had been merged
+      // into goals somewhere else. One container lost all three of its children
+      // and still showed a denominator.
+      //
+      // The abandoned rows stay in the response, because the record keeps what
+      // he tried and stopped. They just stop being counted.
+      const live = children.filter((c) => c.status !== 'abandoned');
       // A container is as far along as its parts. Computed after the children
       // so the roll-up sees their real numbers rather than a stored guess.
       const own = standings.get(g.id)!;
       const s: Standing = g.kind === 'container'
         ? {
-            fraction: rollUp(children.map((c) => c.standing.fraction)),
+            fraction: live.length ? rollUp(live.map((c) => c.standing.fraction)) : null,
             current: null,
-            reached: children.length > 0 && children.every((c) => c.status === 'achieved'),
+            reached: live.length > 0 && live.every((c) => c.status === 'achieved'),
             // Both numbers, because one on its own lies. The magnesium branch
             // came back reading "100%" beside "0 of 2 done": the average of its
             // children was 1, and none of them were finished, and each figure
             // was true. Shown together with what they mean, they stop
             // contradicting each other.
-            summary: children.length
-              ? `${children.filter((c) => c.status === 'achieved').length} of ${children.length} finished, `
-                + `${children.filter((c) => c.standing.fraction === null).length} still waiting`
-              : 'nothing under it yet',
+            summary: live.length
+              ? `${live.filter((c) => c.status === 'achieved').length} of ${live.length} finished, `
+                + `${live.filter((c) => c.standing.fraction === null).length} still waiting`
+              // Says where they went rather than reading as an empty shell. He
+              // opened this branch because something was in it, and something
+              // was: it is now counted somewhere else.
+              : children.length
+                ? `nothing left under it, ${children.length} merged into other goals`
+                : 'nothing under it yet',
           }
         : own;
       return {
@@ -145,7 +161,12 @@ export async function refresh(userId: string): Promise<{ achieved: string[] }> {
     let next = g.status;
 
     if (g.kind === 'container') {
-      next = g.children.length && g.children.every((c) => c.status === 'achieved') ? 'achieved' : 'active';
+      // Live children only, for the same reason as `tree`. Before this, one
+      // abandoned child made a container permanently unachievable: abandoned is
+      // not achieved, so `every` was false forever. The leaf deduplication put
+      // fourteen goals into that state in one go.
+      const live = g.children.filter((c) => c.status !== 'abandoned');
+      next = live.length && live.every((c) => c.status === 'achieved') ? 'achieved' : 'active';
     } else if (g.baselineValue == null && g.baselineText == null) {
       next = 'waiting_baseline';
     } else if (g.blockedBy.some((b) => b.blocker.status !== 'achieved')) {
@@ -253,8 +274,16 @@ export async function abandon(userId: string, id: string) {
 
 /** What he has finished, by month and by year. The reason small goals matter. */
 export async function scoreboard(userId: string) {
+  // LEAVES ONLY. A container finishing is a consequence of its parts finishing,
+  // not a separate thing he did, and counting both means one piece of work
+  // scores twice. It gets worse the deeper the tree happens to be: five of his
+  // containers now hold exactly one goal, so finishing that one goal would have
+  // scored two, and up the nicotine chain it would have scored four.
+  //
+  // How deep the model nested a branch is its wording, not his effort. "You
+  // achieved 28 goals this year" has to be countable by counting what he did.
   const done = await prisma.goal.findMany({
-    where: { userId, status: 'achieved', achievedAt: { not: null } },
+    where: { userId, status: 'achieved', achievedAt: { not: null }, kind: { not: 'container' } },
     orderBy: { achievedAt: 'desc' },
     select: { id: true, title: true, achievedAt: true, why: true },
   });

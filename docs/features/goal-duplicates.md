@@ -158,3 +158,55 @@ same, the evidence survives.
 Branch counts afterwards: Go meds free 47, Sleep on time 30, Stop alcohol 19,
 Lose inches 20. The last two shrank because their copies folded into the older
 branches, which is the point: one goal, counted once.
+
+---
+
+## Containers: a rule that turned out to be "do not"
+
+He asked for the container names to be fixed too. Three designs were drafted for
+merging or collapsing them, and **all three were judged destructive against his
+real tree.** The answer is that containers are never merged by code at all.
+
+**Why not.** His three inflammation containers are not one idea written three
+times. Under Go meds free it carries the claim that the statins rest on it; under
+Stop alcohol, that his drinking drives it; under Lose inches, that his waist
+does. Merging them keeps one sentence and deletes two, and one of those is the
+only place in the app that connects his drinking to his inflammation. The same
+holds for the liver pair and the gut pair. Containers have no `measure` for the
+same reason they have no single identity: they are an argument, not a number.
+
+**The real defect was never the names.** Deduplicating the leaves left eight
+containers reporting on rows that are nobody's goal any more:
+
+| container | was | now |
+|---|---|---|
+| The liver that is holding the fat | 0 of 5 finished | 0 of 1 |
+| Take weight off the frame | 0 of 4 | 0 of 1 |
+| The visceral fat and insulin picture | 0 of 4 | 0 of 1 |
+| The inflammation sitting underneath all of it | 0 of 4 | 0 of 1 |
+| Bring the liver enzymes down off alcohol load | 0 of 4 | 0 of 1 |
+| Clear the things in your record that wake you up | 6 still waiting | 3 still waiting |
+| Fix the magnesium wasting | 0 of 2 | 0 of 1 |
+| Bring down the inflammation... (Stop alcohol) | 0 of 3 | nothing left under it, 3 merged into other goals |
+
+**Two bugs the leaf merge introduced, found by checking rather than assuming.**
+
+`refresh` tested `children.every(achieved)` over ALL children. Abandoned is not
+achieved, so a single merged child made a container permanently unachievable, and
+the merge put fourteen goals' parents into that state at once.
+
+`scoreboard` had no `kind` filter, so containers counted as achievements beside
+their own leaves. Five containers now hold exactly one goal, so finishing that
+one goal would have scored two, and up the nicotine chain four. It counts leaves
+only now. A container finishing is a consequence of its parts finishing, not a
+separate thing he did, and how deeply the model nested a branch is its wording
+rather than his effort.
+
+**What replaces merging.** When two branches hold the same idea, the goal detail
+says so: "You have something close to this in Go meds free too. Kept apart
+because each branch wants it for a different reason." Matched on the significant
+words, because the difference between two of his is "under" and "underneath".
+A caption costs nothing and deletes no sentence.
+
+**Zero writes.** Nothing about containers changes in the database. Every fix here
+is a read.
