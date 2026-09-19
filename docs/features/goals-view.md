@@ -1,6 +1,11 @@
 # Goals: the view
 
-Status: **planned, not started.** Backend is built and live.
+Status: **superseded by `grove.md`.** Backend is built and live.
+
+The gamified view planned here is the farm. Kept for the decisions it records -
+counting finished goals rather than averaging a percentage, celebrating
+achievement only, and the three open questions at the bottom, which are still
+open.
 
 ## What he asked for
 
