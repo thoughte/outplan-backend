@@ -231,6 +231,10 @@ model Exchange {
   /// "what has this person said that never got an answer" runs on every
   /// incoming message, to fold back-to-back messages into one reply.
   @@index([userId, repliedAt])
+  /// Created by the migration that added `answering`, declared here later when
+  /// db:check reported it. "Which message answered this question" is a lookup
+  /// by the answered exchange, and without the index it is a scan.
+  @@index([answeringId])
 
   @@map("exchanges")
 }
