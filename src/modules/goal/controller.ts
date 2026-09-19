@@ -47,7 +47,15 @@ export const goalController = {
           no_tool_call: 'That one did not come back as goals. It may be a subject the model will not plan for, which is worth knowing rather than working around',
           empty: 'That came back with no goals in it',
         };
-        throw badRequest(why[drafted.failure ?? ''] ?? 'Could not break that down into goals just now');
+        const base = why[drafted.failure ?? ''] ?? 'Could not break that down into goals just now';
+        // The upstream detail is appended for the account owner rather than
+        // buried in a log on a machine they cannot read. It names the service's
+        // own error, not anything of theirs.
+        const u = drafted.upstream;
+        const detail = u
+          ? ` (${u.status || 'no response'}${u.type ? ` ${u.type}` : ''}${u.message ? `: ${u.message.slice(0, 200)}` : ''})`
+          : '';
+        throw badRequest(base + detail);
       }
       const n = await save(req.user.id, input.intent, input.exchangeId ?? null, drafted.goals);
       await refresh(req.user.id);

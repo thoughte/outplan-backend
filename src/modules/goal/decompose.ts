@@ -133,15 +133,15 @@ const TOOL = {
                         description: 'Titles of goals that must be finished first. Use it only when the record says so.',
                         },
                       },
-                      required: ['title', 'kind'],
+                      required: ['title', 'kind', 'inferred'],
                     },
                   },
                 },
-                required: ['title', 'kind'],
+                required: ['title', 'kind', 'inferred'],
               },
             },
           },
-          required: ['title', 'kind'],
+          required: ['title', 'kind', 'inferred'],
         },
       },
     },
@@ -168,6 +168,22 @@ const SYSTEM = [
   'Never write a goal that says to stop, skip or reduce a prescribed medicine. That is',
   'not yours to say, and it is not what he is asking for anyway: he is asking to fix the',
   'thing that made the medicine necessary.',
+  '',
+  'SAY WHICH GOALS YOU REASONED YOUR WAY TO. Every goal takes `inferred`, and you must set',
+  'it on every single one. It is false when the goal comes straight off the record: a',
+  'medicine with a recorded reason, a marker already being tracked, something the person',
+  'said in their own words. It is true when you worked it out.',
+  '',
+  'The clearest case is a cause nobody wrote down. Grouping hs-CRP, CRP, uric acid and BMI',
+  'under "the inflammation sitting underneath all of it" is a real idea and it appears in',
+  'no medicine\'s reason, so it is inferred. Naming a mechanism, grouping markers under a',
+  'syndrome, or deciding that one thing is driving another is inferred. Restating what the',
+  'record already says is not.',
+  '',
+  'An inferred goal is KEPT, not discarded, and it is not a lesser goal. It is simply shown',
+  'as yours rather than theirs, and agreeing to its parent never quietly agrees to it. That',
+  'is the whole reason to be honest here: marking it costs nothing and mislabelling it puts',
+  'your reasoning into their health record as though they had told you.',
 ].join('\n');
 
 /** What the model is allowed to know about him, so it grounds rather than guesses. */
@@ -238,6 +254,13 @@ export interface DraftResult {
   failure?: DraftFailure;
   /** What the model said it stopped for, when it said anything. */
   stopReason?: string | null;
+  /** The upstream HTTP status and its own error type, when the call failed
+   *  there. Without these, "the reasoning service did not answer" covers a rate
+   *  limit, an overload, a rejected request and a bad key equally, and the
+   *  difference is the whole diagnosis. The reasoning service runs on the
+   *  server, so its logs are not reachable from a client: this is the only
+   *  channel that tells anybody what happened. */
+  upstream?: { status: number; type?: string; message?: string };
 }
 
 export async function draft(userId: string, intent: string): Promise<DraftResult> {
@@ -264,8 +287,16 @@ export async function draft(userId: string, intent: string): Promise<DraftResult
       signal: ctl.signal,
     });
     if (!res.ok) {
-      console.error(`[goals] upstream ${res.status} for "${intent}": ${(await res.text()).slice(0, 400)}`);
-      return { goals: [], failure: 'upstream' };
+      const body = await res.text();
+      console.error(`[goals] upstream ${res.status} for "${intent}": ${body.slice(0, 600)}`);
+      let type: string | undefined;
+      let message: string | undefined;
+      try {
+        const parsed = JSON.parse(body) as { error?: { type?: string; message?: string } };
+        type = parsed.error?.type;
+        message = parsed.error?.message;
+      } catch { /* not JSON, the status alone will have to do */ }
+      return { goals: [], failure: 'upstream', upstream: { status: res.status, type, message } };
     }
     const data = (await res.json()) as {
       content?: Array<{ type: string; name?: string; input?: unknown; text?: string }>;
@@ -289,8 +320,14 @@ export async function draft(userId: string, intent: string): Promise<DraftResult
     return { goals: cleaned, stopReason: data.stop_reason ?? null };
   } catch (e) {
     const aborted = (e as Error).name === 'AbortError';
-    console.error(`[goals] could not break down "${intent}":`, (e as Error).message);
-    return { goals: [], failure: aborted ? 'timeout' : 'upstream' };
+    console.error(`[goals] could not break down "${intent}":`, (e as Error).name, (e as Error).message);
+    return {
+      goals: [],
+      failure: aborted ? 'timeout' : 'upstream',
+      // Zero status means it never got an answer at all, which is a different
+      // thing from being answered with an error.
+      upstream: aborted ? undefined : { status: 0, type: (e as Error).name, message: (e as Error).message },
+    };
   } finally {
     clearTimeout(timer);
   }
