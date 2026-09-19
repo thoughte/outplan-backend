@@ -82,3 +82,36 @@ export const VISITOR_RULES: { key: string; name: string; earnedFor: string; mech
   { key: 'bees', name: 'Bees', earnedFor: 'Meals logged five days in a week', mechanic: 'nutrition', needs: 5 },
   { key: 'well', name: 'A well', earnedFor: 'Any medical record added', mechanic: 'roots', needs: 1 },
 ];
+
+/** How long since he logged anything, said without making it a score.
+ *
+ *  ABSENCE IS NEVER A FAILURE. There is no streak to have broken, because this
+ *  farm has no streaks, and nothing here dies. A person coming back after six
+ *  weeks must not be met with six weeks of it.
+ *
+ *  Under a week is silence: a few quiet days is normal and mentioning it would
+ *  make it a thing. A week or more gets one flat sentence with no verb in it and
+ *  nothing asked. A month or more adds the only reassurance worth giving, that
+ *  today is not a debt.
+ *
+ *  Deliberately NOT winter. Winter is a rest season entered because he is
+ *  unwell. Being away is not being ill, and merging them would have the app
+ *  deciding he was sick because he was busy.
+ */
+export function lapsed(lastLoggedDay: string | null, today: string): { days: number; say: string } | null {
+  if (!lastLoggedDay) return null;   // nothing ever logged is a beginning, not an absence
+  const ms = Date.parse(`${today}T00:00:00Z`) - Date.parse(`${lastLoggedDay}T00:00:00Z`);
+  const days = Math.floor(ms / 86_400_000);
+  if (!Number.isFinite(days) || days < 7) return null;
+
+  const how = days >= 60 ? `${Math.round(days / 30)} months`
+    : days >= 30 ? 'over a month'
+    : `${days} days`;
+
+  return {
+    days,
+    say: days >= 30
+      ? `It has been ${how}. Nothing is owed for that, and nothing is expected today.`
+      : `It has been ${how}.`,
+  };
+}

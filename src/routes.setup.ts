@@ -157,6 +157,7 @@ export function setupAppRoutes(app: Express): void {
   // Specific paths before /farm/invite/:code, or Express reads "quiz" as a code.
   app.post(API_PREFIX + ALL_ROUTES.farm.plant, farmController.plant);
   app.get(API_PREFIX + ALL_ROUTES.farm.discoveries, farmController.discoveries);
+  app.get(API_PREFIX + ALL_ROUTES.farm.roots, farmController.roots);
   app.get(API_PREFIX + ALL_ROUTES.farm.neighbours, farmController.neighbours);
   app.post(API_PREFIX + ALL_ROUTES.farm.invite, farmController.invite);
   app.post(API_PREFIX + ALL_ROUTES.farm.accept, farmController.accept);

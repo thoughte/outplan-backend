@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { localDay } from '../../shared/helper';
-import { healthFrom, VISITOR_RULES, type Health, type Mechanic, type Visitor } from './rules';
+import { healthFrom, VISITOR_RULES, type Health, type Mechanic, type Visitor, lapsed } from './rules';
 
 const WINDOW = 7;
 
@@ -25,6 +25,16 @@ export interface Farm {
   /** Illness puts the farm into a calm dormant season: no problem states, and
    *  rest is the only thing asked of anyone. */
   winter: boolean;
+  /** How long since anything was logged, and what to say about it.
+   *
+   *  Null under a week, because a few quiet days is not a thing that needs
+   *  mentioning. Never a score, never a count of what was missed.
+   *
+   *  Deliberately NOT winter. Winter is a rest season the farm enters because he
+   *  is unwell, and it says nothing is being asked of him today. Being away is
+   *  not being ill, and treating the two the same would have the app deciding he
+   *  was sick because he was busy. */
+  away: { days: number; say: string } | null;
   /** What is worth doing next, and never more than one thing. A farm that lists
    *  six chores is a chore. */
   nudge: string | null;
@@ -39,7 +49,7 @@ export async function farmFor(userId: string): Promise<Farm> {
   // Everything the farm reacts to, in two queries. Observations are the
   // behaviours; plan items are whether the medicines were actually taken, which
   // is a better signal than someone mentioning them in passing.
-  const [obs, plan, files, everObs] = await Promise.all([
+  const [obs, plan, files, everObs, lastRow] = await Promise.all([
     prisma.observation.groupBy({
       by: ['variable', 'localDay'],
       where: { userId, localDay: { gte: since }, planned: false },
@@ -52,7 +62,14 @@ export async function farmFor(userId: string): Promise<Farm> {
     }),
     prisma.storedFile.groupBy({ by: ['kind'], where: { userId }, _count: { _all: true } }),
     prisma.observation.groupBy({ by: ['variable'], where: { userId }, _count: { _all: true } }),
+    // The last day he actually logged something, over all time. Measured from
+    // what he DID, not from when the app was last opened: opening it is not
+    // using it, and the farm should not congratulate a glance.
+    prisma.observation.findFirst({
+      where: { userId }, orderBy: { localDay: 'desc' }, select: { localDay: true },
+    }),
   ]);
+  const lastLoggedDay = lastRow?.localDay ?? null;
 
   const doneByDay = await prisma.planItem.groupBy({
     by: ['localDay'],
@@ -159,6 +176,16 @@ export async function farmFor(userId: string): Promise<Farm> {
   const byKey = new Map(mechanics.map((m) => [m.key, m]));
   const rootTotal = files.reduce((n, f) => n + f._count._all, 0);
 
+  // How long he has been gone, measured from the last thing he actually logged
+  // rather than from the last time the app was opened. Opening it is not the
+  // same as using it, and the farm should not congratulate a glance.
+  //
+  // ABSENCE IS NEVER A SCORE. No catch-up list, no count of missed days, nothing
+  // withered and nothing recoverable by effort. Nothing on this farm dies, and a
+  // long absence is exactly the case that rule exists for: coming back after six
+  // weeks must not be met with six weeks of failure.
+  const away = lapsed(lastLoggedDay, days[0]!);
+
   const visitors: Visitor[] = VISITOR_RULES.map((v) => ({
     key: v.key, name: v.name, earnedFor: v.earnedFor,
     earned: v.mechanic === 'roots' ? rootTotal >= v.needs : (byKey.get(v.mechanic)?.days ?? 0) >= v.needs,
@@ -183,10 +210,16 @@ export async function farmFor(userId: string): Promise<Farm> {
     roots: files.map((f) => ({ category: f.kind, count: f._count._all })),
     rings: months,
     winter: recentSymptom,
-    nudge: recentSymptom
-      ? 'Resting. Nothing is being asked of you today.'
-      : weakest && weakest.health !== 'thriving'
-        ? weakest.note
-        : null,
+    away,
+    // A long absence silences the nudge entirely. Coming back after a month to
+    // be told what is weakest is being handed a chore on the doorstep, and the
+    // one thing that must not happen here is arriving to a list.
+    nudge: away && away.days >= 30
+      ? null
+      : recentSymptom
+        ? 'Resting. Nothing is being asked of you today.'
+        : weakest && weakest.health !== 'thriving'
+          ? weakest.note
+          : null,
   };
 }

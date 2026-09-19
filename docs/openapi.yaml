@@ -372,6 +372,29 @@ paths:
                 name: { type: string, maxLength: 40 }
       responses: { '201': { description: Planted } }
 
+  /api/v1/farm/roots:
+    get:
+      tags: [farm]
+      summary: What the record is made of
+      description: >
+        Not the files. The Records screen is the files, and a browsable list of
+        documents with soil drawn round it would be the same screen twice. These
+        are the things INSIDE the documents: how many markers have ever been
+        measured, how many of those have more than one reading, what is known
+        about symptoms, medicines and genetics, and how far back it goes.
+
+        COMPLETENESS, NEVER RESULTS. A marker sitting at a frightening value
+        grows exactly the same root as a good one. No value is returned, nothing
+        is ranked by concern, nothing is coloured by whether a number is bad.
+        That rule is what makes uploading safe and what lets this be shown to
+        someone who does not want to look at their results.
+
+        `repeated` is markers with more than one reading, which is the honest
+        measure of how much the record can actually say: a second reading is
+        what turns a number into a direction.
+      responses:
+        '200': { description: Roots, span and repeat count }
+
   /api/v1/farm/discoveries:
     get:
       tags: [farm]

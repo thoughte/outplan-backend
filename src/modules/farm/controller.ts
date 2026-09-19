@@ -6,6 +6,7 @@ import type { AuthenticatedRequest } from '../../shared/types';
 import { farmFor } from './service';
 import { QUIZ, TREES } from './trees';
 import { chooseTree, myFarmIdentity } from './identity';
+import { rootsFor } from './roots';
 import { findFor, listFor } from './discoveries';
 import { createInvite, previewInvite, acceptInvite, neighboursOf } from '../social/service';
 
@@ -39,6 +40,18 @@ export const farmController = {
       res.status(HttpStatusCode.Created).json({
         ok: true, data: await chooseTree(req.user.id, i.answers, i.tree, i.name),
       });
+    } catch (e) { next(e); }
+  },
+
+  /**
+   * GET /api/v1/farm/roots
+   * What the record is made of. Completeness only: no values, no ranking by
+   * concern, nothing coloured by whether a number is bad.
+   */
+  async roots(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw unauthorized();
+      res.status(HttpStatusCode.Ok).json({ ok: true, data: await rootsFor(req.user.id) });
     } catch (e) { next(e); }
   },
 

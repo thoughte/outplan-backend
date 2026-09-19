@@ -151,6 +151,13 @@ ticked, activity, sleep, meals, mood. Roots read stored files. Nothing reads a
 lab value, because growth must track what someone did rather than what their
 blood says.
 
+`away` is how long since he last logged anything, and null under a week. It is
+one flat sentence with nothing asked, never a count of what was missed and never
+a streak, because this farm has none and nothing on it dies. Over a month it also
+silences the nudge: arriving after a month to be told what is weakest is being
+handed a chore on the doorstep. It is deliberately NOT `winter`, which is a rest
+season entered because he is unwell. Being away is not being ill.
+
 `health` is `unknown` when nothing of that kind has ever been logged, which is a
 different fact from `dormant`. An empty week is not a failing farm.
 

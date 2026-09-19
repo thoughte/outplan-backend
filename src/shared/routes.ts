@@ -32,6 +32,7 @@ export const ALL_ROUTES = {
     quiz: '/farm/quiz',
     plant: '/farm/plant',
     discoveries: '/farm/discoveries',
+    roots: '/farm/roots',
     neighbours: '/farm/neighbours',
     invite: '/farm/invite',
     /// Public: a visitor sees the farm and the plot saved for them.
