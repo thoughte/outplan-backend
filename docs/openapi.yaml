@@ -16,6 +16,7 @@ tags:
   - name: public
   - name: sessions
   - name: farm
+  - name: care
   - name: goals
   - name: plan
   - name: talk
@@ -325,6 +326,168 @@ paths:
                           properties:
                             category: { type: string }
                             count: { type: integer }
+
+  /api/v1/farm/quiz:
+    get:
+      tags: [farm]
+      security: []
+      summary: The tree quiz
+      description: >
+        PUBLIC, because someone meets their tree before being asked for
+        anything. Five questions about temperament and how a day is spent. NONE
+        is about health: the tree appears on a share card and beside neighbours'
+        farms, so a quiz that asked about symptoms would make the resulting tree
+        a disclosure that travels. All seven trees are reachable and the same
+        answers always give the same tree.
+      responses: { '200': { description: Questions and the trees } }
+
+  /api/v1/farm/plant:
+    post:
+      tags: [farm]
+      summary: Choose and name a tree
+      description: >
+        The quiz suggests, the person decides; both are stored. Re-taking it
+        renames and re-picks rather than starting a second farm, because nothing
+        earned is attached to the species and changing your mind should cost
+        nothing.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                answers: { type: object, additionalProperties: { type: integer } }
+                tree: { type: string, enum: [banyan, mango, neem, cherry, oak, bamboo, baobab] }
+                name: { type: string, maxLength: 40 }
+      responses: { '201': { description: Planted } }
+
+  /api/v1/farm/discoveries:
+    get:
+      tags: [farm]
+      summary: Patterns found in their own behaviour
+      description: >
+        Behaviour against behaviour, never against a lab value. Needs 14 days and
+        at least 4 days on each side of the comparison, and a gap of 30 points
+        before it says anything - a pattern over four days is a coincidence with
+        a nice sentence attached. Every card shows how many days it rests on, and
+        describes rather than prescribes.
+      responses: { '200': { description: Discovery cards } }
+
+  /api/v1/farm/neighbours:
+    get:
+      tags: [farm]
+      summary: The farms beside this one
+      description: >
+        EARNED REWARDS ONLY. No problem states, quests, records or conversation,
+        and no count of what is missing - "3 of 6" tells a neighbour about three
+        habits this person is not keeping. Each reward carries how it is earned,
+        which is what makes a neighbour's farm teach anything.
+      responses: { '200': { description: Neighbouring farms } }
+
+  /api/v1/farm/invite:
+    post:
+      tags: [farm]
+      summary: Create an invitation
+      description: >
+        The code is random and carries nothing about the sender: a stranger who
+        guesses one must learn no health data and no identity.
+      responses: { '201': { description: A code } }
+
+  /api/v1/farm/invite/{code}:
+    get:
+      tags: [farm]
+      security: []
+      summary: What a visitor sees before signing up
+      description: >
+        PUBLIC, and the most exposed surface in the product: a first name, a tree,
+        its name, and earned rewards. Never a full name - that is the string
+        medical reports are matched against - and never what is missing.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: The farm and the plot saved for them }
+        '404': { description: Not a valid invitation }
+
+  /api/v1/farm/invite/{code}/accept:
+    post:
+      tags: [farm]
+      summary: Become neighbours
+      description: >
+        No reward is granted here. A free month lands only when the invited
+        friend's first payment clears: rewarding a signup invites self-referral
+        and trial-cancel loops, and a discount that can be farmed is not one.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Neighbours }
+        '400': { description: Your own invitation, or already used }
+
+  /api/v1/care:
+    get:
+      tags: [care]
+      summary: Who is in my circle and what each can see
+      description: >
+        One screen, in the words the owner chose. "You can revoke this" is only
+        true if they can see what it is.
+      responses: { '200': { description: The circle } }
+    post:
+      tags: [care]
+      summary: Add someone to my circle
+      description: >
+        Only the owner creates a link. Every category starts OFF - a default that
+        shares is a default nobody chose, and this is a medication history.
+        Re-adding someone unpauses; it never restores toggles they once had.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses:
+        '201': { description: Added, seeing nothing yet }
+        '404': { description: Nobody with that address uses outplan }
+
+  /api/v1/care/{id}:
+    post:
+      tags: [care]
+      summary: Change what one person can see
+      description: Owner only. A viewer can ask and that is all.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seeCheckIn: { type: boolean }
+                seeDoses: { type: boolean }
+                seeProblems: { type: boolean }
+                seeQuietDays: { type: boolean }
+                quietAfterDays: { type: integer, minimum: 1, maximum: 30 }
+      responses: { '200': { description: Updated } }
+
+  /api/v1/care/{id}/pause:
+    post:
+      tags: [care]
+      summary: Pause or resume sharing
+      description: >
+        Paused, never deleted. The viewer is told only that sharing has paused,
+        never why: a reason would be a disclosure of its own.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: Paused or resumed } }
+
+  /api/v1/care/view/{ownerId}:
+    get:
+      tags: [care]
+      summary: Look at someone who put me in their circle
+      description: >
+        Assembled from their toggles one at a time. A field that is off is never
+        read, so no rendering bug can leak what the query did not return. Doses
+        come back as a count, never which ones: knowing a missed medicine by name
+        is a diagnosis by another route. Quiet days phrase as a prompt to call,
+        never a report of failure.
+      parameters: [{ name: ownerId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: What they allow }
+        '403': { description: Not in their circle }
 
   /api/v1/goals:
     get:

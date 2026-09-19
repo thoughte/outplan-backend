@@ -82,6 +82,12 @@ model User {
   agentKeys     AgentKey[]
   planItems     PlanItem[]
   goals         Goal[]
+  farm          Farm?
+  invites       Invite[]
+  careOwned     CareLink[]    @relation("careOwner")
+  careViewing   CareLink[]    @relation("careViewer")
+  discoveries   Discovery[]
+  subscription  Subscription?
   measurements  Measurement[]
   symptoms      Symptom[]
   interventions Intervention[]
@@ -710,6 +716,11 @@ model PlanItem {
   /// Lower sorts first. Morning things before evening things.
   sortOrder Int @default(0) @map("sort_order")
 
+  /// The goal this quest serves, when it is one. Ticking it is what moves that
+  /// goal's adherence, so the link is the whole point rather than decoration.
+  goalId String? @map("goal_id") @db.Uuid
+  goal   Goal?   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
   source         PlanSource
   interventionId String?       @map("intervention_id") @db.Uuid
   intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
@@ -733,6 +744,9 @@ model PlanItem {
 
 enum PlanSource {
   intervention
+  /// A quest: today's face of a behaviour goal. Not a separate system - a goal
+  /// says "in bed by midnight", and this is the line for tonight.
+  goal
   manual
 }
 
@@ -812,6 +826,8 @@ model Goal {
   interventionId String?       @map("intervention_id") @db.Uuid
   intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
 
+  planItems PlanItem[]
+
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, status])
@@ -863,4 +879,182 @@ enum GoalStatus {
   active
   achieved
   abandoned
+}
+
+/// The tree someone identifies with, and the farm it stands in.
+///
+/// The core bet of the PRD: people care for what they chose and named. A tree
+/// picked in a quiz, named by its owner, standing beside friends' trees, holds
+/// attention where points and streaks do not.
+///
+/// The quiz asks about temperament, never health. "A free Sunday morning: where
+/// are you?" is a fair question; anything about symptoms would make the choice
+/// of tree a disclosure.
+model Farm {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tree     TreeKind
+  /// Named by its owner. A named tree is harder to abandon.
+  treeName String   @map("tree_name")
+
+  /// The quiz result can be rejected. Choice matters more than quiz accuracy,
+  /// so this records what was suggested and what was taken.
+  suggested TreeKind? 
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  neighboursOut Neighbour[] @relation("from")
+  neighboursIn  Neighbour[] @relation("to")
+
+  @@map("farms")
+}
+
+enum TreeKind {
+  banyan
+  mango
+  neem
+  cherry
+  oak
+  bamboo
+  baobab
+}
+
+/// Two farms side by side.
+///
+/// A link, not a follow: it is mutual by construction, created once and read
+/// from both ends. Neighbours see EARNED REWARDS ONLY - never problem states,
+/// quests, records or conversation - and a farm missing a reward must look
+/// identical to one that has not unlocked it.
+model Neighbour {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromId String @map("from_id") @db.Uuid
+  from   Farm   @relation("from", fields: [fromId], references: [id], onDelete: Cascade)
+  toId   String @map("to_id") @db.Uuid
+  to     Farm   @relation("to", fields: [toId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([fromId, toId])
+  @@index([toId])
+  @@map("neighbours")
+}
+
+/// An invitation, and the referral it may become.
+///
+/// The free month lands only after the invited friend's first payment clears.
+/// Rewarding a signup invites self-referral and trial-cancel loops, and a
+/// discount that can be farmed stops being a discount.
+model Invite {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Who sent it.
+  userId   String @map("user_id") @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Opaque, unguessable, and the only thing in the link. It must carry nothing
+  /// about the sender's health, and nothing that identifies them to a stranger
+  /// who guesses a code.
+  code     String @unique
+
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  acceptedAt   DateTime? @map("accepted_at")
+  /// Set when their first payment clears, never at signup.
+  rewardedAt   DateTime? @map("rewarded_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("invites")
+}
+
+/// Someone allowed to see more than a neighbour does.
+///
+/// The person being seen controls everything; the person watching controls
+/// nothing. Sharing is per category and each one is off until deliberately
+/// turned on, because a default that shares is a default nobody chose.
+model CareLink {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Whose record is being shared.
+  ownerId String @map("owner_id") @db.Uuid
+  owner   User   @relation("careOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Who may look.
+  viewerId String @map("viewer_id") @db.Uuid
+  viewer   User   @relation("careViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  /// Exactly what they may see. Never a role, never a level: a named list, so
+  /// the owner's screen can show it back to them in the same words they chose.
+  seeCheckIn   Boolean @default(false) @map("see_check_in")
+  seeDoses     Boolean @default(false) @map("see_doses")
+  seeProblems  Boolean @default(false) @map("see_problems")
+  seeQuietDays Boolean @default(false) @map("see_quiet_days")
+  /// After how many silent days their circle is told to call. Their number, not
+  /// ours.
+  quietAfterDays Int @default(3) @map("quiet_after_days")
+
+  /// Paused rather than deleted: the viewer is told only that sharing has
+  /// paused, never why, and the owner can restart it without re-explaining.
+  pausedAt  DateTime? @map("paused_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@unique([ownerId, viewerId])
+  @@index([viewerId])
+  @@map("care_links")
+}
+
+/// Something true about this person that nobody told them.
+///
+/// The top-tier reward in the PRD: "you sleep 40 minutes longer on days you walk
+/// before 6pm". Kept as a card once found, because a finding that disappears
+/// when the data shifts was never worth showing.
+model Discovery {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// A stable key for the pair it relates, so the same finding is not collected
+  /// twice under two wordings.
+  key   String
+  title String
+  /// The numbers behind it, kept so it can be checked rather than believed.
+  detail String @db.Text
+  /// How many days of data it rests on. Shown, because a pattern from four days
+  /// is a coincidence with a nice sentence attached.
+  days Int
+
+  foundAt DateTime @default(now()) @map("found_at")
+
+  @@unique([userId, key])
+  @@map("discoveries")
+}
+
+/// Whether someone is paying, and what happens when they stop.
+///
+/// A lapse rests the farm under mist and preserves it whole. What it never
+/// touches: records stay readable, exportable and deletable, and medication
+/// reminders keep working. A person's medical data is never held behind a
+/// paywall, and safety is never a paid feature.
+model Subscription {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status      SubStatus @default(trialing)
+  trialEndsAt DateTime? @map("trial_ends_at")
+  renewsAt    DateTime? @map("renews_at")
+  /// Free months earned by referral, spent before any charge.
+  freeMonths  Int       @default(0) @map("free_months")
+
+  /// Whatever the payment provider calls this person, once one exists. Null
+  /// until then, which is the whole of billing that cannot be built here.
+  providerRef String? @map("provider_ref")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+enum SubStatus {
+  trialing
+  active
+  lapsed
 }

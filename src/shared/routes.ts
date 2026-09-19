@@ -26,7 +26,25 @@ export const ALL_ROUTES = {
     one: '/agent-keys/:id',
   },
 
-  farm: '/farm',
+  farm: {
+    base: '/farm',
+    /// Public: someone meets their tree before being asked for anything.
+    quiz: '/farm/quiz',
+    plant: '/farm/plant',
+    discoveries: '/farm/discoveries',
+    neighbours: '/farm/neighbours',
+    invite: '/farm/invite',
+    /// Public: a visitor sees the farm and the plot saved for them.
+    preview: '/farm/invite/:code',
+    accept: '/farm/invite/:code/accept',
+  },
+
+  care: {
+    base: '/care',
+    one: '/care/:id',
+    pause: '/care/:id/pause',
+    view: '/care/view/:ownerId',
+  },
 
   goals: {
     base: '/goals',

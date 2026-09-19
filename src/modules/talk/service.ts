@@ -7,6 +7,7 @@ import { TALK_PROMPT_KEY } from '../prompt/defaults';
 import { userRepo } from '../user/repo';
 import { localDay, clockFor } from '../../shared/helper';
 import { recordFrom } from '../record/extract';
+import { redFlag } from '../farm/safety';
 import { talkRepo } from './repo';
 import {
   toExchangeResponse,
@@ -52,6 +53,28 @@ export const talkService: TalkService = {
     // answered is not part of what they are saying now, it is a failure to go
     // and look at separately.
     const orphans = await talkRepo.unanswered(userId, exchange.id, 15 * 60_000, 5);
+
+    // RED FLAGS RUN FIRST, on his own words, before any model sees them.
+    //
+    // Two reasons it is here rather than in the prompt. A model can be talked
+    // out of a prompt rule and cannot be talked out of a regex. And this message
+    // must not arrive in the tree's warm, playful voice: someone describing
+    // chest pain needs the plain one, immediately, with a number to call.
+    //
+    // It does not replace the reply. The conversation continues underneath -
+    // cutting someone off after they have said something frightening is its own
+    // kind of abandonment.
+    const flag = redFlag(input.said);
+    if (flag) {
+      await talkRepo.attachReply(exchange.id, {
+        replied: flag.say,
+        replyParts: { messages: flag.say.split('\n\n') },
+        model: 'safety',
+        promptVersion: `safety:${flag.reason}`,
+      });
+      console.warn(`[safety] ${flag.reason} flagged for ${userId}`);
+      return this.one(userId, exchange.id);
+    }
 
     const prompt = await promptRepo.active(TALK_PROMPT_KEY).catch(() => null);
     if (prompt) {

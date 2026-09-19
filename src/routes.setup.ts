@@ -18,6 +18,7 @@ import { appConfigController } from './modules/app-config/controller';
 import { planController } from './modules/plan/controller';
 import { goalController } from './modules/goal/controller';
 import { farmController } from './modules/farm/controller';
+import { careController } from './modules/care/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -76,6 +77,13 @@ export function setupAppRoutes(app: Express): void {
   // holds CORS origins and the model name.
   app.get(API_PREFIX + ALL_ROUTES.clientConfig, appConfigController.client);
 
+  // The quiz and an invitation preview run BEFORE anyone signs up. That is the
+  // whole referral idea: a link opens onto a friend's farm and the plot saved
+  // for you, with no account and no install in the way. Both are therefore the
+  // most exposed surfaces here, and both return earned rewards only.
+  app.get(API_PREFIX + ALL_ROUTES.farm.quiz, farmController.quiz);
+  app.get(API_PREFIX + ALL_ROUTES.farm.preview, farmController.preview);
+
   // None. Sign-in and sign-up happen in the browser against Firebase; the
   // backend only ever verifies the resulting token.
 
@@ -118,7 +126,19 @@ export function setupAppRoutes(app: Express): void {
 
   // /goals/propose before /goals/:id, or Express reads "propose" as an id and
   // the route is unreachable - the same trap as /talk/export.
-  app.get(API_PREFIX + ALL_ROUTES.farm, farmController.mine);
+  app.get(API_PREFIX + ALL_ROUTES.farm.base, farmController.mine);
+  // Specific paths before /farm/invite/:code, or Express reads "quiz" as a code.
+  app.post(API_PREFIX + ALL_ROUTES.farm.plant, farmController.plant);
+  app.get(API_PREFIX + ALL_ROUTES.farm.discoveries, farmController.discoveries);
+  app.get(API_PREFIX + ALL_ROUTES.farm.neighbours, farmController.neighbours);
+  app.post(API_PREFIX + ALL_ROUTES.farm.invite, farmController.invite);
+  app.post(API_PREFIX + ALL_ROUTES.farm.accept, farmController.accept);
+
+  app.get(API_PREFIX + ALL_ROUTES.care.base, careController.mine);
+  app.post(API_PREFIX + ALL_ROUTES.care.base, careController.add);
+  app.post(API_PREFIX + ALL_ROUTES.care.one, careController.share);
+  app.post(API_PREFIX + ALL_ROUTES.care.pause, careController.pause);
+  app.get(API_PREFIX + ALL_ROUTES.care.view, careController.view);
 
   app.get(API_PREFIX + ALL_ROUTES.goals.base, goalController.list);
   app.post(API_PREFIX + ALL_ROUTES.goals.propose, goalController.propose);

@@ -43,12 +43,42 @@ export async function planFor(userId: string, localDay: string) {
     });
   }
 
+  // Quests: today's line for every active behaviour goal.
+  //
+  // Not a second system. A goal says "in bed by midnight"; this is tonight's
+  // line, ticked exactly the way a tablet is, and ticking it moves that goal's
+  // adherence. A goal that is blocked, waiting for a baseline or already
+  // achieved puts nothing here - a list that includes things you cannot act on
+  // today is a list you stop reading.
+  const quests = await prisma.goal.findMany({
+    where: { userId, kind: 'behaviour', status: 'active' },
+    select: { id: true, title: true, why: true, direction: true },
+  });
+
+  if (quests.length) {
+    await prisma.planItem.createMany({
+      data: quests.map((g) => ({
+        userId, localDay,
+        key: `goal:${g.id}`,
+        title: g.title,
+        detail: g.why?.slice(0, 200) ?? null,
+        // No clock. A behaviour goal is something to do today, not at a moment,
+        // and inventing a time would put a deadline on it that nobody set.
+        atLocal: null,
+        sortOrder: 12 * 60,
+        source: 'goal' as const,
+        goalId: g.id,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
   return prisma.planItem.findMany({
     where: { userId, localDay },
     orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
     select: {
       id: true, key: true, title: true, detail: true, atLocal: true, sortOrder: true,
-      source: true, status: true, doneAt: true, doneVia: true, localDay: true,
+      source: true, status: true, doneAt: true, doneVia: true, localDay: true, goalId: true,
     },
   });
 }
@@ -68,7 +98,7 @@ export async function setDone(userId: string, id: string, done: boolean) {
       : { status: 'pending', doneAt: null, doneVia: null, observationId: null },
     select: {
       id: true, key: true, title: true, detail: true, atLocal: true, sortOrder: true,
-      source: true, status: true, doneAt: true, doneVia: true, localDay: true,
+      source: true, status: true, doneAt: true, doneVia: true, localDay: true, goalId: true,
     },
   });
 }
