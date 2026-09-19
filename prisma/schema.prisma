@@ -454,6 +454,19 @@ model Observation {
   value    String @db.Text
   notes    String? @db.Text
 
+  /// How much, when they said how much.
+  ///
+  /// The value stays their own words - "around 1.5 litres", "slept maybe 5
+  /// hours" - because that is what they told us. These two are the number
+  /// pulled out of it, and without them nothing can react to an AMOUNT: the
+  /// farm could only tell whether something was logged, which rewards talking
+  /// about sleep rather than sleeping.
+  ///
+  /// Null is normal and not a failure. "Had momos" has no amount, and a meal is
+  /// still a meal.
+  amount Float?
+  unit   String?
+
   /// Said, but not yet done.
   ///
   /// "I will have veg biryani in 30 mins" is not a meal, it is an intention -

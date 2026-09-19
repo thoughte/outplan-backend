@@ -65,6 +65,20 @@ const EXTRACT_TOOL = {
               maxLength: 400,
               description: 'Detail worth keeping that does not fit the value - timing, severity, context.',
             },
+            amount: {
+              type: 'number',
+              description:
+                'The number, when they gave one. "around 1.5 litres" is 1.5, "slept 5 hours" is 5, ' +
+                '"2 rotis" is 2, "walked 30 min" is 30. Leave it out when no number was said - ' +
+                'never estimate one, because a guessed amount becomes a fact in their record.',
+            },
+            unit: {
+              type: 'string',
+              maxLength: 20,
+              description:
+                'The unit for that number, in their terms: litres, ml, glasses, hours, minutes, ' +
+                'steps, rotis, pieces, cigarettes. Only alongside an amount.',
+            },
             planned: {
               type: 'boolean',
               description:
@@ -96,12 +110,16 @@ const SYSTEM = [
   'Never record the same thing twice in one message. Never carry anything over from',
   'earlier messages: you are shown one message and you write down what is in it.',
   '',
+  'Pull out a NUMBER only when they said one. "1.5 litres" is 1.5 litres; "a lot of water"',
+  'is not a number and must not become one. An invented amount is worse than no amount,',
+  'because it enters the record looking exactly like something they told you.',
+  '',
   'Mark anything they say they WILL do as planned. "I will have biryani in 30 minutes"',
   'has not happened yet; recording it as though it did puts a meal in their record',
   'they may never eat.',
 ].join('\n');
 
-export interface Extracted { kind: string; value: string; notes?: string; planned?: boolean }
+export interface Extracted { kind: string; value: string; notes?: string; planned?: boolean; amount?: number; unit?: string }
 
 /** Ask the model what this message reports. Null on any failure - the caller
  *  treats that as "nothing recorded", never as an error worth surfacing. */
@@ -144,7 +162,16 @@ async function readMessage(said: string): Promise<Extracted[] | null> {
         && typeof (o as Extracted).value === 'string'
         && (o as Extracted).value.trim() !== ''
         && (KINDS as readonly string[]).includes((o as Extracted).kind))
-      .map((o) => ({ kind: o.kind, value: o.value.trim().slice(0, 200), notes: o.notes?.trim().slice(0, 400) || undefined, planned: o.planned === true }))
+      .map((o) => ({
+        kind: o.kind,
+        value: o.value.trim().slice(0, 200),
+        notes: o.notes?.trim().slice(0, 400) || undefined,
+        planned: o.planned === true,
+        // A number that is not finite is not a number. NaN reaching the column
+        // would poison every average taken over it afterwards.
+        amount: typeof o.amount === 'number' && Number.isFinite(o.amount) ? o.amount : undefined,
+        unit: typeof o.unit === 'string' && o.unit.trim() ? o.unit.trim().slice(0, 20) : undefined,
+      }))
       // The same thing twice in one message is a model slip, not two events.
       .filter((o) => { const k = `${o.kind}|${o.value.toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; })
       .slice(0, 8);
@@ -181,6 +208,8 @@ export async function recordFrom(
         value: o.value,
         notes: o.notes ?? null,
         planned: o.planned === true,
+        amount: o.amount ?? null,
+        unit: o.unit ?? null,
       })),
     }),
     prisma.exchange.update({ where: { id: exchangeId }, data: { parsed: found as never } }),

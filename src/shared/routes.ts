@@ -26,6 +26,8 @@ export const ALL_ROUTES = {
     one: '/agent-keys/:id',
   },
 
+  farm: '/farm',
+
   goals: {
     base: '/goals',
     propose: '/goals/propose',

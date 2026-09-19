@@ -17,6 +17,7 @@ import { agentKeyController } from './modules/agent-key/controller';
 import { appConfigController } from './modules/app-config/controller';
 import { planController } from './modules/plan/controller';
 import { goalController } from './modules/goal/controller';
+import { farmController } from './modules/farm/controller';
 
 /** Registration order is the security model, not a style choice.
  *
@@ -117,6 +118,8 @@ export function setupAppRoutes(app: Express): void {
 
   // /goals/propose before /goals/:id, or Express reads "propose" as an id and
   // the route is unreachable - the same trap as /talk/export.
+  app.get(API_PREFIX + ALL_ROUTES.farm, farmController.mine);
+
   app.get(API_PREFIX + ALL_ROUTES.goals.base, goalController.list);
   app.post(API_PREFIX + ALL_ROUTES.goals.propose, goalController.propose);
   app.post(API_PREFIX + ALL_ROUTES.goals.confirm, goalController.confirm);

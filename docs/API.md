@@ -120,6 +120,30 @@ device asking.
 
 ---
 
+## Farm
+
+### `GET /api/v1/farm`
+Computed on every read, never stored. Two stores for one fact drift, and the one
+people look at would be the wrong one.
+
+Six mechanics, each reading rows that already exist: water and drinks, plan items
+ticked, activity, sleep, meals, mood. Roots read stored files. Nothing reads a
+lab value, because growth must track what someone did rather than what their
+blood says.
+
+`health` is `unknown` when nothing of that kind has ever been logged, which is a
+different fact from `dormant`. An empty week is not a failing farm.
+
+Medication counts **per dose**, not per perfect day. All-or-nothing was the first
+rule and it was cruel arithmetic: five of six tablets taken reported as "0 of 7",
+which reads as having taken nothing.
+
+`winter` needs words meaning ill *today*. Any-symptom would put someone with a
+standing complaint in permanent winter, and a season that never ends says
+nothing.
+
+---
+
 ## Goals
 
 ### `GET /api/v1/goals`

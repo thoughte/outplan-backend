@@ -15,6 +15,7 @@ servers:
 tags:
   - name: public
   - name: sessions
+  - name: farm
   - name: goals
   - name: plan
   - name: talk
@@ -251,6 +252,79 @@ paths:
       summary: Sign out one device
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '204': { description: Done } }
+
+  /api/v1/farm:
+    get:
+      tags: [farm]
+      summary: The farm, computed from the record
+      description: >
+        Nothing about farm state is stored. It is a read over rows that already
+        exist - observations written from conversation, plan items ticked, files
+        uploaded - because two stores for one fact drift and the one people look
+        at would be the wrong one.
+
+        Five rules hold it together. Nothing dies: there is no state below
+        "needs attention". Weeks not streaks: five of seven days, so a bad
+        Tuesday breaks no chain. Effort not outcome: no mechanic reads a lab
+        value. More is not better: everything caps at its target. And absence
+        must not signal - a farm with no fireflies looks the same whether its
+        owner sleeps badly or has not unlocked them.
+
+        `health` is `unknown`, not a problem, when nothing of that kind has ever
+        been logged. An empty week is not a failing farm, it is an app that has
+        not been told anything.
+      responses:
+        '200':
+          description: The farm
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      today: { type: string, format: date }
+                      rings: { type: integer, description: One a month since the account began. }
+                      winter:
+                        type: boolean
+                        description: >
+                          Illness, not symptoms. Triggered by words meaning unwell
+                          today, never by a standing complaint - otherwise someone
+                          with chronic symptoms lives in permanent winter and the
+                          season stops meaning anything.
+                      nudge: { type: string, nullable: true, description: At most one thing. }
+                      mechanics:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key: { type: string }
+                            scene: { type: string, example: Leaves }
+                            health: { type: string, enum: [thriving, steady, needs_attention, dormant, unknown] }
+                            days: { type: integer }
+                            window: { type: integer }
+                            amount: { type: number, nullable: true }
+                            unit: { type: string, nullable: true }
+                            note: { type: string, example: "5 of 12 doses over the last 7 days" }
+                      visitors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key: { type: string }
+                            name: { type: string }
+                            earnedFor: { type: string, description: Every reward explains itself. }
+                            earned: { type: boolean }
+                      roots:
+                        type: array
+                        description: Records as roots. Completeness, never results.
+                        items:
+                          type: object
+                          properties:
+                            category: { type: string }
+                            count: { type: integer }
 
   /api/v1/goals:
     get:
