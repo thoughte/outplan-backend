@@ -1,5 +1,13 @@
 import { prisma } from '../../lib/prisma';
 
+/** As-needed, in every spelling his prescriptions actually use.
+ *
+ *  Exported because the goal decomposition needs exactly the same three-way
+ *  split. A tablet he takes twice a month is not something to get free of, and
+ *  building a branch of goals about stopping it is the same mistake as calling
+ *  it a daily medicine. */
+export const ASNEEDED = /as needed|\bsos\b|\bprn\b|occasional/i;
+
 /** What the assistant is told about this person before it answers.
  *
  *  This is the difference between chatting with a stranger and chatting with
@@ -125,7 +133,6 @@ export async function buildBrief(userId: string): Promise<string | null> {
   // at both ends is a historical note, and an as-needed schedule is its own
   // thing - taken sometimes is not taken daily, and the difference matters for
   // every interaction question that follows.
-  const ASNEEDED = /as needed|\bsos\b|\bprn\b|occasional/i;
   const live = interventions.filter((i) => !i.stoppedOn);
   const daily = live.filter((i) => i.startedOn && !ASNEEDED.test(i.schedule ?? ''));
   const asNeeded = live.filter((i) => i.startedOn && ASNEEDED.test(i.schedule ?? ''));

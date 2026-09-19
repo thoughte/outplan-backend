@@ -98,17 +98,59 @@ a wrong one, discovered later.
 - Charts of a marker over time. That is the Records screen's job and it does not
   exist yet either.
 
-## Open, and his to decide
+## Decided, 19 Sep 2026
 
-1. **Scope of "meds free".** The decomposition built branches for Sompraz-L,
-   sildenafil and Atorvastatin. He is not on Atorvastatin; the other two are
-   as-needed. Six daily medicines, or everything he might reach for?
-2. **Confirming forty proposals one at a time is too many.** Confirming a
-   container should probably confirm its subtree, with individual drops after.
-3. **The inflammation branch was inferred, not recorded.** hs-CRP, CRP, uric acid
-   and BMI were grouped as "the inflammation sitting underneath all of it",
-   which is not in any medicine's reason. It may well be right. It should be
-   his call whether an inferred branch stands beside the grounded ones.
+These three sat open across several sessions while other things shipped. Leaving
+a question open is not neutral: it blocked the goal tree from being honest, and
+asking him again is what he has now told me to stop doing. Each has a default a
+careful person would take, each is reversible, and each is recorded here with
+its reason so he can overturn any of them in one sentence.
+
+**1. "Meds free" means the six he takes every day.**
+
+This turned out to be a bug, not a preference. `decompose.ts` selected
+`stoppedOn: null` and called the result "medicines he is on", which is the same
+two-state read that once put two statins and a drug he does not take into his
+record. Not-stopped is not the same as taken-daily: it also catches an as-needed
+tablet and a row with no start date.
+
+Now three states, sharing the pattern with `brief.ts`. The daily six are what a
+meds-free goal is about. As-needed medicines are named to the model with an
+explicit instruction not to build a branch about stopping them, because there is
+nothing to stop: he already does not take them most days. Fixing the reason one
+gets reached for is worth a goal; stopping it is not. Anything undated is named
+as unknown and no goal is built on it either way.
+
+Atorvastatin therefore disappears from the tree on its own, without a rule about
+Atorvastatin. That is the right shape: the fix is to the reading, not to a list.
+
+**2. Confirming a container confirms its subtree.**
+
+Forty confirmations one at a time is a wall he walks away from halfway, leaving a
+tree that is half confirmed and a screen that can report nothing honestly. He
+agreed to the thing; the parts are what the thing is made of. Dropping a part
+afterwards is one tap and it is reversible, which is the right way round: a wrong
+cascade costs a tap, forty taps costs the feature.
+
+Two exceptions. An inferred goal never cascades, for the reason below. An
+abandoned goal never revives, because he already said no to that one and a
+cascade that overrules him is worse than a wall.
+
+A baseline typed on the container stays on the container. Copying it down would
+invent forty starting numbers out of one.
+
+**3. The inflammation branch stands, marked as inferred.**
+
+Deleting it would be wrong: it may well be right, and "silent watch" says his
+theory is never stupid, which cuts both ways. Letting it stand beside the
+grounded branches would also be wrong: nothing in any medicine's reason says
+hs-CRP, CRP, uric acid and BMI belong to one cause, and a record that cannot
+tell a reading from a reasoning is not a record.
+
+So `Goal.inferred` now carries it. The model declares it when it reasons rather
+than reads, the tree returns it, and confirming a parent never confirms it. The
+flag is never cleared on confirm: it is provenance, and provenance does not stop
+being true once somebody agrees with it.
 
 ## How it will be checked
 

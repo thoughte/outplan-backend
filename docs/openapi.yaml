@@ -560,8 +560,22 @@ paths:
       summary: Turn a proposal into a goal
       description: >
         A baseline may be supplied here. Without one an outcome goal becomes
-        waiting_baseline and reports no progress at all, rather than pretending -
+        waiting_baseline and reports no progress at all, rather than pretending.
         "lose inches" with no starting waist is a wish, not a goal.
+
+        Confirming a container CONFIRMS ITS SUBTREE. One sentence decomposes
+        into forty pieces, and forty separate confirmations is a wall nobody
+        walks through. Dropping an individual part afterwards is one tap and it
+        is reversible.
+
+        Two things never cascade. An inferred goal, because agreeing to "get off
+        the statin" is not agreeing that inflammation underlies everything, and
+        taking the second as part of the first is how an assumption becomes a
+        fact in a health record. And an abandoned goal, because he already said
+        no to that one.
+
+        A supplied baseline applies ONLY to the goal it was sent for. Copying it
+        down would invent a starting number for every child.
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       requestBody:
         content:
@@ -572,7 +586,10 @@ paths:
                 baselineValue: { type: number }
                 baselineText: { type: string, maxLength: 200 }
       responses:
-        '200': { description: Now active }
+        '200':
+          description: >
+            Now active. Returns { goal, alsoConfirmed }, where alsoConfirmed is
+            how many goals under it were confirmed by the cascade.
         '400': { description: Already set }
 
   /api/v1/goals/{id}:

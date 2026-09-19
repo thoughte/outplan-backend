@@ -817,6 +817,18 @@ model Goal {
   status     GoalStatus @default(proposed)
   achievedAt DateTime?  @map("achieved_at")
 
+  /// True when nothing in the record says this, and it was reasoned to rather
+  /// than read off. The inflammation branch is the case: hs-CRP, CRP, uric acid
+  /// and BMI were grouped as the thing sitting underneath everything else, and
+  /// that grouping appears in no medicine's reason.
+  ///
+  /// It is kept, not deleted, because his theory is never stupid and neither is
+  /// a good inference. But it stands apart: confirming a container does NOT
+  /// cascade into an inferred child, and the screen says where it came from.
+  /// Never cleared on confirm, because it is provenance and provenance does not
+  /// stop being true once somebody agrees with it.
+  inferred Boolean @default(false)
+
   /// Where it came from: the sentence he said, the message it was said in, and
   /// the medicine it would free him from. Provenance for a goal, same rule as
   /// everything else here - he should be able to ask why this is on his list.

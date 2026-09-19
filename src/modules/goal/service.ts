@@ -21,6 +21,9 @@ export interface GoalNode {
   targetValue: number | null;
   achievedAt: Date | null;
   intentText: string | null;
+  /** Reasoned to, not read off the record. Shown as such, and never confirmed
+   *  by confirming its parent. */
+  inferred: boolean;
   blockedBy: { id: string; title: string; achieved: boolean }[];
   standing: Standing;
   children: GoalNode[];
@@ -110,7 +113,7 @@ export async function tree(userId: string): Promise<GoalNode[]> {
         id: g.id, title: g.title, why: g.why, kind: g.kind as GoalNode['kind'],
         status: g.status, direction: g.direction as Direction, measure: g.measure,
         baselineValue: g.baselineValue, targetValue: g.targetValue,
-        achievedAt: g.achievedAt, intentText: g.intentText,
+        achievedAt: g.achievedAt, intentText: g.intentText, inferred: g.inferred,
         blockedBy: g.blockedBy.map((b) => ({
           id: b.blocker.id, title: b.blocker.title, achieved: b.blocker.status === 'achieved',
         })),
@@ -168,23 +171,76 @@ export async function refresh(userId: string): Promise<{ achieved: string[] }> {
   return { achieved: justAchieved };
 }
 
-/** Confirm a proposed goal. Nothing is a goal until he says it is. */
+/** Confirm a proposed goal, and everything under it.
+ *
+ *  Nothing is a goal until he says it is. But one sentence decomposes into
+ *  forty pieces, and confirming forty things one at a time is a wall nobody
+ *  walks through: the decomposition stops being a help and becomes a chore he
+ *  abandons halfway, leaving a tree half confirmed and a screen that can report
+ *  nothing honestly.
+ *
+ *  So confirming a container confirms its subtree. He agreed to the thing; the
+ *  parts are what the thing is made of. Dropping an individual part afterwards
+ *  is one tap and it is reversible, which is the right way round: the cost of a
+ *  wrong cascade is a tap, the cost of forty taps is the feature.
+ *
+ *  Two things never cascade.
+ *
+ *  An INFERRED goal is one nobody recorded, reasoned to rather than read off.
+ *  Agreeing to "get off the statin" is not agreeing that inflammation underlies
+ *  everything, and quietly taking the second as part of the first is how an
+ *  assumption becomes a fact in a health record.
+ *
+ *  An ABANDONED goal stays abandoned. He already said no to that one, and a
+ *  cascade that revives it overrules him.
+ */
 export async function confirm(userId: string, id: string, baseline?: { value?: number; text?: string }) {
   const g = await prisma.goal.findFirst({ where: { id, userId } });
   if (!g) throw notFound('No such goal');
   if (g.status !== 'proposed') throw badRequest('That one is already set');
 
-  await prisma.goal.update({
-    where: { id },
-    data: {
-      status: 'active',
-      baselineValue: baseline?.value ?? g.baselineValue,
-      baselineText: baseline?.text ?? g.baselineText,
-      baselineAt: baseline && (baseline.value != null || baseline.text) ? new Date() : g.baselineAt,
-    },
+  const all = await prisma.goal.findMany({
+    where: { userId }, select: { id: true, parentId: true, status: true, inferred: true },
   });
+  const kids = new Map<string, typeof all>();
+  for (const row of all) {
+    if (!row.parentId) continue;
+    const list = kids.get(row.parentId) ?? [];
+    list.push(row);
+    kids.set(row.parentId, list);
+  }
+
+  // Walk down from the one he tapped, stopping at anything inferred.
+  const cascade: string[] = [];
+  const queue = [...(kids.get(id) ?? [])];
+  while (queue.length) {
+    const row = queue.shift()!;
+    if (row.inferred || row.status !== 'proposed') continue;
+    cascade.push(row.id);
+    queue.push(...(kids.get(row.id) ?? []));
+  }
+
+  await prisma.$transaction([
+    prisma.goal.update({
+      where: { id },
+      data: {
+        status: 'active',
+        baselineValue: baseline?.value ?? g.baselineValue,
+        baselineText: baseline?.text ?? g.baselineText,
+        // The baseline he typed belongs to the goal he typed it on. It is not
+        // true of its children, and copying it down would invent forty
+        // starting numbers out of one.
+        baselineAt: baseline && (baseline.value != null || baseline.text) ? new Date() : g.baselineAt,
+      },
+    }),
+    ...(cascade.length
+      ? [prisma.goal.updateMany({ where: { id: { in: cascade } }, data: { status: 'active' } })]
+      : []),
+  ]);
+
   await refresh(userId);
-  return prisma.goal.findUnique({ where: { id } });
+  const confirmed = await prisma.goal.findUnique({ where: { id } });
+  return { goal: confirmed, alsoConfirmed: cascade.length };
 }
 
 export async function abandon(userId: string, id: string) {

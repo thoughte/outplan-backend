@@ -1,6 +1,7 @@
 import { ENV_CONFIG } from '../../config/env.config';
 import { getSetting } from '../../config/app.config';
 import { prisma } from '../../lib/prisma';
+import { ASNEEDED } from '../record/brief';
 
 /** Break something he wants into pieces small enough to finish.
  *
@@ -30,6 +31,8 @@ interface Drafted {
   /** Titles of siblings that must finish first. Titles rather than ids because
    *  none of these exist yet when the model writes them. */
   after?: string[];
+  /** Reasoned to rather than read off the record. */
+  inferred?: boolean;
   children?: Drafted[];
 }
 
@@ -61,6 +64,7 @@ const TOOL = {
             'container = holds other goals and has no measure of its own.',
             },
             why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
+            inferred: { type: 'boolean', description: 'True when nothing in the record says this and you reasoned your way to it. Grouping several markers under a cause nobody wrote down is inferred. Say so honestly: an inferred goal is kept, it is just not confirmed by agreeing to its parent.' },
             measure: {
             type: 'string', maxLength: 60,
             description:
@@ -87,6 +91,7 @@ const TOOL = {
                   'container = holds other goals and has no measure of its own.',
                   },
                   why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
+                  inferred: { type: 'boolean', description: 'True when nothing in the record says this and you reasoned your way to it. Grouping several markers under a cause nobody wrote down is inferred. Say so honestly: an inferred goal is kept, it is just not confirmed by agreeing to its parent.' },
                   measure: {
                   type: 'string', maxLength: 60,
                   description:
@@ -113,6 +118,7 @@ const TOOL = {
                         'container = holds other goals and has no measure of its own.',
                         },
                         why: { type: 'string', maxLength: 300, description: 'Why this is a goal, from the record where possible.' },
+                        inferred: { type: 'boolean', description: 'True when nothing in the record says this and you reasoned your way to it. Grouping several markers under a cause nobody wrote down is inferred. Say so honestly: an inferred goal is kept, it is just not confirmed by agreeing to its parent.' },
                         measure: {
                         type: 'string', maxLength: 60,
                         description:
@@ -166,10 +172,19 @@ const SYSTEM = [
 
 /** What the model is allowed to know about him, so it grounds rather than guesses. */
 async function context(userId: string): Promise<string> {
-  const meds = await prisma.intervention.findMany({
+  // Three states, not two. `stoppedOn: null` means "never recorded as stopped",
+  // which is NOT the same as "taking it daily": it also catches an as-needed
+  // tablet and a row that was never given a start date. Reading them as one
+  // list is the bug that once put two statins and a drug he does not take into
+  // his record, and it would put each of them in this tree as something to get
+  // free of.
+  const live = await prisma.intervention.findMany({
     where: { userId, stoppedOn: null },
-    select: { name: true, reason: true, schedule: true },
+    select: { name: true, reason: true, schedule: true, startedOn: true },
   });
+  const meds = live.filter((m) => m.startedOn && !ASNEEDED.test(m.schedule ?? ''));
+  const asNeeded = live.filter((m) => m.startedOn && ASNEEDED.test(m.schedule ?? ''));
+  const undated = live.filter((m) => !m.startedOn);
   const markers = await prisma.measurement.findMany({
     where: { userId, canonicalValue: { not: null } },
     distinct: ['variable'],
@@ -182,9 +197,23 @@ async function context(userId: string): Promise<string> {
   });
 
   return [
-    'MEDICINES HE IS ON, and why each was started:',
+    'MEDICINES HE TAKES EVERY DAY, and why each was started. These are the ones',
+    'a goal about being free of medicines is about:',
     ...meds.map((m) => `  ${m.name}${m.schedule ? ` (${m.schedule})` : ''} - ${m.reason ?? 'no reason recorded'}`),
     '',
+    ...(asNeeded.length ? [
+      'TAKEN ONLY WHEN NEEDED. Do NOT build a branch about getting free of these:',
+      'there is nothing to be free of, he already does not take them most days.',
+      'Fixing the reason they get reached for is worth a goal. Stopping them is not.',
+      ...asNeeded.map((m) => `  ${m.name}${m.schedule ? ` (${m.schedule})` : ''} - ${m.reason ?? 'no reason recorded'}`),
+      '',
+    ] : []),
+    ...(undated.length ? [
+      'IN THE RECORD WITH NO START DATE. It is not known whether he is on these.',
+      'Do not assume either way and do not build a goal on one:',
+      ...undated.map((m) => `  ${m.name}`),
+      '',
+    ] : []),
     'MARKERS IN HIS RECORD (use these exact names as `measure`):',
     ...markers.slice(0, 120).map((m) => `  ${m.variable} = ${m.canonicalValue}${m.canonicalUnit ? ' ' + m.canonicalUnit : ''}`),
     '',
@@ -282,6 +311,7 @@ function clean(nodes: unknown): Drafted[] {
       title,
       kind,
       why: typeof n.why === 'string' ? n.why.trim().slice(0, 300) : undefined,
+      inferred: n.inferred === true,
       measure: typeof n.measure === 'string' && n.measure.trim() ? n.measure.trim().slice(0, 60) : undefined,
       // Null rather than a guess when the word means nothing we recognise: the
       // goal then inherits 'down' at write time, and at least the mistake is in
@@ -331,6 +361,11 @@ export async function save(
           baselineValue: baseline?.canonicalValue ?? null,
           baselineAt: baseline?.collectedOn ?? null,
           status: 'proposed',
+          // Carried straight through from what the model declared. A goal that
+          // says it was reasoned to is kept and shown, but agreeing to its
+          // parent never agrees to it: that is how an inference becomes a fact
+          // in a record, and this record is a person's.
+          inferred: n.inferred === true,
           intentText: parentId === null ? intent : null,
           exchangeId,
         },
