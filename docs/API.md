@@ -260,6 +260,13 @@ Body: `{ "said": string, "answering"?: uuid }` → `201 { data: Exchange }`
   costs the message.
 - After the reply is sent, the message is read for observations. Not before: it
   would double the wait for an answer.
+- **Agent keys may SEND but never READ.** `GET /talk`, `/talk/:id` and
+  `/talk/export` refuse an agent key; `POST /talk` does not. An exchange created
+  with one is marked `viaAgent`, nothing is extracted from it into the record,
+  and the screen shows it for what it is. Refusing to send meant every change to
+  the conversation shipped untested: three real bugs reached him in one evening
+  that way. A guard that guarantees the bugs are found by the person it protects
+  is not protecting them.
 - Every observation carries `said`: one of `did`, `will`, `did-not`, `used-to`,
   `considering`, `asking-about`. **Only `did` is a thing that happened, and only
   `did` ticks anything off the day plan.** An item whose modality the model

@@ -189,7 +189,10 @@ const setGoal = defineOp({
   description:
     'Turn a proposed goal into a real one. Needs the id from read_goals. Confirming '
     + 'a container confirms everything under it, except anything marked as worked '
-    + 'out rather than read off their record.',
+    + 'out rather than read off their record. '
+    + 'ONLY WHEN THEY ASK. Saying what they want is not asking you to switch it on: '
+    + 'they were shown proposals so they could look at them and decide. Propose, '
+    + 'tell them it is waiting, and stop. Nothing is a goal until they say it is.',
   schema: z.object({ id: z.string().uuid().describe('The goal id, from read_goals.') }),
   run: async (input, ctx) => {
     const out = await confirmGoal(ctx.userId, input.id);
@@ -255,6 +258,43 @@ const proposeGoal = defineOp({
       + 'it is stored and shown back to them as the reason these goals exist.'),
   }),
   run: async (input, ctx) => {
+    // ALREADY ASKED FOR THIS?
+    //
+    // He said "do workout at least 15 mins a day" and got two branches a minute
+    // apart, "Work out at least 15 minutes a day" with 17 goals under it and
+    // "Work out at least 15 minutes every day" with 19. Thirty-six goals for one
+    // sentence. The measure-based deduplication cannot see it: these are
+    // behaviours and containers, which have no measure, and the titles differ by
+    // one word so nothing matching on titles sees it either.
+    //
+    // The honest key is the WISH, which is stored verbatim on the top of each
+    // branch as `intentText`. Compared on significant words, because "15 mins"
+    // and "15 minutes" are the same wish.
+    const gist = (t: string) => new Set(
+      t.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+        .filter((w) => w.length > 2 && !['the', 'and', 'for', 'least', 'day', 'every', 'atleast'].includes(w))
+        .map((w) => (w.startsWith('min') ? 'min' : w)),
+    );
+    const wanted = gist(input.intent);
+    const existing = await prisma.goal.findMany({
+      where: { userId: ctx.userId, intentText: { not: null }, status: { not: 'abandoned' } },
+      select: { id: true, title: true, intentText: true, status: true },
+    });
+    for (const g of existing) {
+      const have = gist(g.intentText ?? '');
+      const shared = [...wanted].filter((w) => have.has(w)).length;
+      if (shared >= 2 && shared >= Math.min(wanted.size, have.size) * 0.6) {
+        return {
+          ok: false,
+          result: {
+            error: 'they already asked for this and it was broken down',
+            existing: { id: g.id, title: g.title, status: g.status },
+            tell_them: `That is already in there as "${g.title}". Point at it rather than making a second one.`,
+          },
+        };
+      }
+    }
+
     const drafted = await draft(ctx.userId, input.intent);
     if (!drafted.goals.length) {
       return { ok: false, result: { error: drafted.failure ?? 'could not break that down just now' } };

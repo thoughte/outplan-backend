@@ -56,11 +56,42 @@ function stripQuestion(text: string, question?: { text: string }): string {
   return text.endsWith(tail) ? text.slice(0, -tail.length).trimEnd() : text;
 }
 
+/** A tool result small enough to send, still valid JSON, and honest about what
+ *  was left out.
+ *
+ *  The first version sliced the serialised string at 4000 characters, which
+ *  produced truncated JSON and a model that could see something was missing but
+ *  not what. Now the biggest array in the result is shortened and a line is
+ *  added saying how many were dropped, so the model knows to narrow its question
+ *  rather than guessing at the rest. */
+function fitResult(result: unknown, limit = 12_000): string {
+  const whole = JSON.stringify(result);
+  if (whole.length <= limit) return whole;
+
+  if (result && typeof result === 'object') {
+    const copy: Record<string, unknown> = { ...(result as Record<string, unknown>) };
+    const arrays = Object.entries(copy)
+      .filter((e): e is [string, unknown[]] => Array.isArray(e[1]))
+      .sort((a, b) => b[1].length - a[1].length);
+
+    for (const [key, arr] of arrays) {
+      while (JSON.stringify(copy).length > limit && (copy[key] as unknown[]).length > 5) {
+        const cut = copy[key] as unknown[];
+        copy[key] = cut.slice(0, Math.max(5, Math.floor(cut.length * 0.7)));
+      }
+      copy[`${key}_note`] = `showing ${(copy[key] as unknown[]).length} of ${arr.length}. Ask for a narrower slice if you need the rest.`;
+      if (JSON.stringify(copy).length <= limit) return JSON.stringify(copy);
+    }
+    return JSON.stringify(copy).slice(0, limit);
+  }
+  return whole.slice(0, limit);
+}
+
 /** One thing the assistant did, as stored on the exchange. */
 interface DidThing { id: string; name: string; input: unknown; result: unknown; say?: string; undone?: boolean }
 
 export interface TalkService {
-  say(userId: string, input: CreateExchangeInput): Promise<ExchangeResponse>;
+  say(userId: string, input: CreateExchangeInput, viaAgent?: boolean): Promise<ExchangeResponse>;
   unrecord(userId: string, id: string): Promise<ExchangeResponse>;
   undoThing(userId: string, id: string, opId: string): Promise<ExchangeResponse>;
   list(userId: string, q: ListQuery): Promise<ExchangeResponse[]>;
@@ -78,7 +109,7 @@ export const talkService: TalkService = {
    *  - compose the answer, then store both - loses the message whenever the
    *  answer fails, which is exactly when the message matters most.
    */
-  async say(userId, input) {
+  async say(userId, input, viaAgent = false) {
     const user = await userRepo.findById(userId);
     if (!user) throw notFound('No such account');
 
@@ -94,6 +125,7 @@ export const talkService: TalkService = {
       said: input.said,
       localDay: localDay(new Date(), user.timezone),
       answeringId: answered ? input.answering : null,
+      viaAgent,
     });
 
     // Anything they sent that never got an answer.
@@ -240,7 +272,18 @@ export const talkService: TalkService = {
         for (const ask of result.ops) {
           const out = await runOp(ask, { userId, localDay: exchange.localDay, exchangeId: exchange.id });
           ran.push({ id: ask.id, name: ask.name, input: ask.input, result: out.result, say: out.say });
-          results.push({ type: 'tool_result', tool_use_id: ask.id, content: JSON.stringify(out.result).slice(0, 4000) });
+          // Truncated STRUCTURALLY, never mid-JSON.
+          //
+          // A blind slice at 4000 characters cut the goals list in half and the
+          // model said so out loud: "the goals list gets truncated before it
+          // reaches the workout branch, so I can't see its status from here". A
+          // tool result that is not valid JSON is worse than a short one,
+          // because the model cannot tell what it is missing.
+          results.push({
+            type: 'tool_result',
+            tool_use_id: ask.id,
+            content: fitResult(out.result),
+          });
         }
         history.push({ role: 'assistant' as const, content: result.raw });
         history.push({ role: 'user' as const, content: results });
@@ -325,6 +368,11 @@ export const talkService: TalkService = {
     //
     // Until this existed the app said "I'll log that" and logged nothing: not a
     // single observation had ever been written from a conversation.
+    // NOTHING IS READ OUT OF A REHEARSAL. A message sent with an agent key goes
+    // through the whole path so the path can be checked, and stops short of the
+    // record. His record contains what he said, and he did not say this.
+    if (viaAgent) return this.one(userId, exchange.id);
+
     void recordFrom(
       exchange.id, userId,
       // Same reason as above: "Boiled" alone records nothing. With the question

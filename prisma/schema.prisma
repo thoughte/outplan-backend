@@ -185,6 +185,14 @@ model Exchange {
   /// Shape: [{ id, name, input, result, say }]
   didThings     Json?    @map("did_things")
 
+  /// This message was sent with an agent key, not typed by them.
+  ///
+  /// It exists so a rehearsal can go through the real path without becoming
+  /// part of their conversation. Nothing is read out of one into the record,
+  /// and the screen marks it, because a line they never wrote sitting
+  /// unmarked in their own chat is the one thing this must never produce.
+  viaAgent      Boolean  @default(false) @map("via_agent")
+
   repliedAt     DateTime? @map("replied_at")
   model         String?
   promptVersion String?  @map("prompt_version")

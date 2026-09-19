@@ -179,7 +179,12 @@ export function setupAppRoutes(app: Express): void {
   // Conversation is the person, not the agent. An agent key carries no scope
   // for it, and this is where that is actually enforced rather than merely
   // recorded in a column.
-  app.use(API_PREFIX + '/talk', peopleOnly);
+  // Reading a conversation back is refused for an agent key. Sending is not:
+  // a rehearsal has to go through the real path, and the exchange it creates is
+  // marked so it is never mistaken for something he said.
+  app.get(API_PREFIX + ALL_ROUTES.talk.base, peopleOnly);
+  app.get(API_PREFIX + ALL_ROUTES.talk.one, peopleOnly);
+  app.get(API_PREFIX + ALL_ROUTES.talk.export, peopleOnly);
   app.get(API_PREFIX + ALL_ROUTES.talk.export, talkController.exportAll);
   app.post(API_PREFIX + ALL_ROUTES.talk.base, talkController.say);
   app.get(API_PREFIX + ALL_ROUTES.talk.base, talkController.list);

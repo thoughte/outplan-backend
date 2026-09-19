@@ -7,7 +7,7 @@ export const talkRepo = {
   /** Store the words FIRST, before anything interprets them. Everything else on
    *  this row is derived and can be recomputed; the person's own sentence
    *  cannot. */
-  create: (data: { userId: string; said: string; localDay: string; answeringId?: string | null }): Promise<Exchange> =>
+  create: (data: { userId: string; said: string; localDay: string; answeringId?: string | null; viaAgent?: boolean }): Promise<Exchange> =>
     prisma.exchange.create({ data }),
 
   /** The question asked in a given exchange's reply, if that exchange is his

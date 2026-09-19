@@ -19,7 +19,8 @@
     "db:check": "prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource prisma.config.mjs --exit-code",
     "goals:dupes": "npx --yes tsx scripts/goal-dupes.ts",
     "prompt:show": "npx --yes tsx scripts/prompt-publish.ts",
-    "prompt:publish": "npx --yes tsx scripts/prompt-publish.ts --publish"
+    "prompt:publish": "npx --yes tsx scripts/prompt-publish.ts --publish",
+    "try": "npx --yes tsx scripts/try-chat.ts"
   },
   "keywords": [],
   "author": "",

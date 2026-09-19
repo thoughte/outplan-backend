@@ -37,6 +37,9 @@ export interface ExchangeResponse {
   /** Set when this message was answered as part of a later reply, because
    *  several arrived before any answer came back. Not unanswered. */
   coveredById: string | null;
+  /** Sent with an agent key rather than typed. Marked on screen, and nothing is
+   *  read out of it into the record. */
+  viaAgent: boolean;
   /** The exchange this one answers, when he tapped an option rather than typed. */
   answeringId: string | null;
   replied: string | null;
@@ -58,6 +61,7 @@ export function toExchangeResponse(
     localDay: e.localDay,
     parsed: e.parsed,
     coveredById: e.coveredById,
+    viaAgent: e.viaAgent,
     answeringId: e.answeringId,
     replied: e.replied,
     replyParts: e.replyParts,

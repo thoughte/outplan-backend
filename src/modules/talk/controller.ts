@@ -58,7 +58,7 @@ export const talkController = {
     try {
       if (!req.user) throw unauthorized();
       const input = createExchangeSchema.parse(req.body);
-      const data = await talkService.say(req.user.id, input);
+      const data = await talkService.say(req.user.id, input, !!req.agentKey);
       res.status(HttpStatusCode.Created).json({ ok: true, data });
     } catch (e) { next(e); }
   },

@@ -136,21 +136,30 @@ export function requireRole(...roles: Array<'member' | 'clinician' | 'admin'>) {
   };
 }
 
-/** Refuse an agent key on routes that are the person speaking.
+/** Refuse an agent key on routes that hand back a conversation.
  *
- *  The key's scopes say it may move records, not talk. Writing that in a column
- *  and never checking it is worse than not writing it at all - it reads as a
- *  guarantee while being decoration.
+ *  What this protects is specific: an agent key must not be able to READ his
+ *  conversation. The record is data he asked to be maintained; the talking is
+ *  him, and an export of it is the most private thing here.
  *
- *  What this protects is specific: an agent key must not be able to put words
- *  into his conversation, and must not be able to read a conversation back. The
- *  record is data he asked to be maintained; the talking is him.
+ *  SENDING is a different question, and the first version got it wrong by
+ *  treating them as one. Refusing to send meant every change to the
+ *  conversation shipped untested, with him asked to go and try it himself.
+ *  Three real bugs reached him that way in a single evening: a goal created
+ *  twice off one sentence, a tool result cut off mid-JSON, and a goal switched
+ *  on that he never asked to switch on. A guard that guarantees the bugs are
+ *  found by the person it protects is not protecting them.
+ *
+ *  So sending with an agent key is allowed and the exchange is MARKED. Nothing
+ *  is read out of a marked one into his record, and the screen shows it for
+ *  what it is. The property that mattered is kept: his record never contains
+ *  words he did not say.
  */
 export function peopleOnly(
   req: AuthenticatedRequest, _res: Response, next: NextFunction,
 ): void {
   if (req.agentKey) {
-    next(forbidden('An agent key cannot be used for conversation - only for records'));
+    next(forbidden('An agent key cannot read this conversation'));
     return;
   }
   next();
