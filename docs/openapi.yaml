@@ -428,12 +428,17 @@ paths:
       description: >
         One screen, in the words the owner chose. "You can revoke this" is only
         true if they can see what it is.
+
+        Returns each link's raw switches (seeCheckIn, seeDoses, seeProblems,
+        seeQuietDays) alongside the sentence form, so the owner's screen can put
+        each one in the first person rather than reading a description of
+        somebody back to them.
       responses: { '200': { description: The circle } }
     post:
       tags: [care]
       summary: Add someone to my circle
       description: >
-        Only the owner creates a link. Every category starts OFF - a default that
+        Only the owner creates a link. Every category starts OFF, a default that
         shares is a default nobody chose, and this is a medication history.
         Re-adding someone unpauses; it never restores toggles they once had.
       requestBody:

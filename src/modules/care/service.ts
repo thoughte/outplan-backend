@@ -87,6 +87,13 @@ export async function circleOf(ownerId: string) {
     who: l.viewer.name ?? l.viewer.email,
     paused: l.pausedAt !== null,
     quietAfterDays: l.quietAfterDays,
+    // The raw switches, so the owner's screen can render each one in the first
+    // person ("whether I took my medicines") rather than reading a sentence
+    // back to the person it is about.
+    seeCheckIn: l.seeCheckIn,
+    seeDoses: l.seeDoses,
+    seeProblems: l.seeProblems,
+    seeQuietDays: l.seeQuietDays,
     sees: [
       l.seeCheckIn && 'whether you checked in',
       l.seeDoses && 'whether you took your medicines',
