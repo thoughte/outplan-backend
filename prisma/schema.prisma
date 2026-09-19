@@ -606,6 +606,18 @@ model StoredFile {
   kind   FileKind
   status FileStatus @default(current)
 
+  /// The app's own material: kept because it is theirs, never listed as theirs
+  /// to read.
+  ///
+  /// Nine markdown documents on the owner's account were written by the app's
+  /// tooling during the one migration this product will ever do, and filed
+  /// under kind 'plan' as if a person had uploaded them. They then sat on the
+  /// Records screen beside his blood tests. His rule, 20 Sep 2026: no generated
+  /// document belongs to a user. What such a document holds is digested into
+  /// rows; the file stays as provenance and nothing more. The list and content
+  /// endpoints both exclude these, so there is no path from a screen to them.
+  internal Boolean @default(false)
+
   /// The date the CONTENT is about - when blood was drawn, when a plan was
   /// written. NOT when the file was uploaded. A scan of a March test uploaded
   /// today is March data, and charting it as today would be a lie.
@@ -648,6 +660,9 @@ model StoredFile {
 
 enum FileKind {
   report
+  /// No longer accepted on upload. The app builds plans; a person does not
+  /// upload one. The rows that carry it came from the owner's migration and are
+  /// marked internal.
   plan
   scan
   note

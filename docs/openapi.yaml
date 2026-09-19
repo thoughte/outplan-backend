@@ -871,7 +871,7 @@ paths:
               required: [file]
               properties:
                 file: { type: string, format: binary }
-                kind: { type: string, enum: [report, plan, scan, note, other] }
+                kind: { type: string, enum: [report, scan, note, other] }
                 status: { type: string, enum: [current, superseded, draft] }
                 contentDate: { type: string, format: date }
       responses:
@@ -899,7 +899,10 @@ paths:
                   data: { $ref: '#/components/schemas/StoredFile' }
     get:
       tags: [files]
-      summary: Everything stored
+      summary: Everything the person put here
+      description: >
+        Rows the app wrote for itself (internal) are never listed and never
+        served from /content. A generated document is not a record.
       responses:
         '200':
           description: List

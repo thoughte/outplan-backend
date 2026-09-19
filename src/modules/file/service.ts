@@ -77,9 +77,16 @@ export const fileService = {
     }
   },
 
+  /** Everything the person put here. Not everything stored under their id.
+   *
+   *  `internal` rows are the app's own material: documents its tooling wrote,
+   *  kept as provenance and never listed as the person's own. They were, once,
+   *  and the owner found nine of them on his Records screen between his blood
+   *  tests. A generated document is not a record.
+   */
   async list(userId: string) {
     return prisma.storedFile.findMany({
-      where: { userId },
+      where: { userId, internal: false },
       orderBy: [{ contentDate: 'desc' }, { uploadedAt: 'desc' }],
       select: {
         id: true, filename: true, mediaType: true, bytes: true, kind: true,
@@ -95,7 +102,9 @@ export const fileService = {
 
   /** The bytes back, for showing the person their own original. */
   async read(userId: string, id: string): Promise<{ file: StoredFile; bytes: Buffer }> {
-    const file = await prisma.storedFile.findFirst({ where: { id, userId } });
+    // Same exclusion as the list. A row the screen cannot see must not be
+    // reachable by guessing its id either.
+    const file = await prisma.storedFile.findFirst({ where: { id, userId, internal: false } });
     if (!file) throw notFound('No such file');
     const bytes = await readFile(join(ENV_CONFIG.FILES_DIR, file.path)).catch(() => {
       throw notFound('That file is recorded but its contents are missing from storage');

@@ -58,7 +58,9 @@ export function resolveType(mimetype: string | undefined, filename: string): str
 }
 
 export const uploadSchema = z.object({
-  kind: z.enum(['report', 'plan', 'scan', 'note', 'other']).default('other'),
+  /// 'plan' is not on this list. The app builds plans; a person does not upload
+  /// one, and the only plan files that ever existed were the app's own.
+  kind: z.enum(['report', 'scan', 'note', 'other']).default('other'),
   status: z.enum(['current', 'superseded', 'draft']).default('current'),
   /// The date the CONTENT is about. Not when it was uploaded.
   contentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

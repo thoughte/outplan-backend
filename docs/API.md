@@ -371,7 +371,7 @@ into later context so the same mistake is not made twice.
 
 ### `POST /api/v1/files`
 `multipart/form-data`. Do **not** set `content-type` yourself; the browser writes
-the boundary. Fields: `file`, `kind`, `status`, `contentDate?` (YYYY-MM-DD).
+the boundary. Fields: `file`, `kind` (report, scan, note, other), `status`, `contentDate?` (YYYY-MM-DD).
 
 - `201` stored · `200 { duplicate: true }` the same bytes were already here.
   Nothing was created, and a report is digested exactly once.
@@ -382,6 +382,11 @@ the boundary. Fields: `file`, `kind`, `status`, `contentDate?` (YYYY-MM-DD).
   every file whose name had no date in it.
 
 ### `GET /api/v1/files` · `GET /api/v1/files/:id/content` · `POST /api/v1/files/read-pending`
+
+Both list and `/content` exclude rows marked `internal`: documents the app's own
+tooling wrote, kept as provenance and never the person's to read. `kind: plan`
+is no longer accepted on upload for the same reason. A generated document is
+not a record.
 
 `/content` returns the bytes and **requires the headers**, so a plain `<a href>`
 cannot reach it. Fetch it and hand the blob to the viewer.
