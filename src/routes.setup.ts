@@ -186,6 +186,9 @@ export function setupAppRoutes(app: Express): void {
   app.get(API_PREFIX + ALL_ROUTES.talk.one, talkController.one);
   app.post(API_PREFIX + ALL_ROUTES.talk.correct, talkController.correct);
   app.delete(API_PREFIX + ALL_ROUTES.talk.record, talkController.unrecord);
+  app.delete(API_PREFIX + ALL_ROUTES.talk.undoThing, talkController.undoThing);
+  // Multipart, so it needs the same upload middleware the Records screen uses.
+  app.post(API_PREFIX + ALL_ROUTES.talk.attach, upload.single('file'), talkController.attach);
 
   // --- ADMIN BOUNDARY -----------------------------------------------------
   // app.use(API_PREFIX + '/admin', requireRole('admin'));

@@ -755,6 +755,55 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '200': { description: One exchange } }
 
+  /api/v1/talk/attach:
+    post:
+      tags: [talk]
+      summary: Say something with a file attached
+      description: >
+        Multipart. The file goes through the SAME store and the SAME digest as
+        the Records screen, so the identity check, the collection-date rule and
+        the duplicate check all apply. Chat is not a second door with weaker
+        locks.
+
+        The model is told the file exists and what it is called. It never reads
+        numbers out of it: measurements reach the record through digest or not
+        at all, and a model reading "ApoB 121" off a photo is the hallucinated
+        record with a camera attached.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                said: { type: string, description: What they typed alongside it }
+      responses:
+        '201': { description: Stored, with the exchange and the reply }
+        '400': { description: No file was attached }
+
+  /api/v1/talk/{id}/did/{opId}:
+    delete:
+      tags: [talk]
+      summary: Undo one thing the assistant did
+      description: >
+        Every operation the assistant runs is recorded on the exchange with what
+        it was given and what came back, and each carries its own undo, which
+        the type system required when the operation was written. So this is a
+        lookup and a call, never a guess at how to reverse something.
+
+        The entry is MARKED undone rather than removed. What it did and what he
+        thought of it are both part of the record.
+
+        Safe to call twice.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: opId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: The exchange, with that entry marked undone }
+        '404': { description: No such message, or nothing like that on it }
+
   /api/v1/talk/{id}/record:
     delete:
       tags: [talk]

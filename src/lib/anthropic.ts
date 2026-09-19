@@ -17,9 +17,16 @@ export interface ReplyParts {
   question?: ReplyQuestion;
 }
 
+export interface ToolAsk { id: string; name: string; input: unknown }
+
 export interface ReasoningResult {
   /** The parts, for showing. */
   parts: ReplyParts;
+  /** Operations it wants run. Empty on an ordinary reply. */
+  ops: ToolAsk[];
+  /** The assistant turn verbatim, so it can be replayed when tool results go
+   *  back. The API requires the exact blocks it sent. */
+  raw: unknown[];
   /** The same thing flattened, for the next turn's history. A model reading its
    *  own previous answer does not need to know it arrived in three bubbles. */
   text: string;
@@ -120,8 +127,8 @@ function isStageDirection(text: string): boolean {
  */
 export async function reason(
   system: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  opts: { maxTokens?: number; timeoutMs?: number } = {},
+  messages: Array<{ role: 'user' | 'assistant'; content: unknown }>,
+  opts: { maxTokens?: number; timeoutMs?: number; tools?: Array<Record<string, unknown>> } = {},
 ): Promise<ReasoningResult | null> {
   if (!ENV_CONFIG.ANTHROPIC_API_KEY) return null;
   if (!(await getSetting('reasoning.enabled').catch(() => false))) return null;
@@ -147,8 +154,19 @@ export async function reason(
 
 async function attemptReason(
   system: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  opts: { maxTokens?: number; timeoutMs?: number },
+  messages: Array<{ role: 'user' | 'assistant'; content: unknown }>,
+  opts: {
+    maxTokens?: number;
+    timeoutMs?: number;
+    /** Operation tools offered alongside `reply`.
+     *
+     *  When any are given, `tool_choice` becomes `any` instead of naming
+     *  `reply`. That relaxation is the one risk in this whole feature: forcing
+     *  `reply` is what stopped a reply once arriving as the literal text "I'll
+     *  use the reply tool". `any` still forces SOME tool, so the model cannot
+     *  answer in prose, which keeps the property that mattered. */
+    tools?: Array<Record<string, unknown>>;
+  },
 ): Promise<ReasoningResult | null> {
 
   const model = await getSetting('reasoning.model').catch(() => 'claude-opus-5');
@@ -168,8 +186,11 @@ async function attemptReason(
         max_tokens: opts.maxTokens ?? 1024,
         system,
         messages,
-        tools: [REPLY_TOOL],
-        tool_choice: { type: 'tool', name: REPLY_TOOL.name },
+        tools: [REPLY_TOOL, ...(opts.tools ?? [])],
+        // `any` rather than naming `reply`, so an operation can be called. Still
+        // forced: the model must call SOMETHING, so it cannot answer in prose,
+        // which is the property the original forcing was protecting.
+        tool_choice: opts.tools?.length ? { type: 'any' } : { type: 'tool', name: REPLY_TOOL.name },
       }),
       signal: ctl.signal,
     });
@@ -198,6 +219,12 @@ async function attemptReason(
     const call = (data.content ?? []).find((b) => b.type === 'tool_use' && b.name === REPLY_TOOL.name);
     const parts = normalise(call?.input);
 
+    // Operations it asked for, in the order it asked. The caller runs them and
+    // comes back round; nothing is executed in here.
+    const ops = (data.content ?? [])
+      .filter((b) => b.type === 'tool_use' && b.name !== REPLY_TOOL.name)
+      .map((b) => ({ id: (b as { id?: string }).id ?? '', name: b.name ?? '', input: b.input }));
+
     // Fall back to plain text if the tool call is missing or unusable. A model
     // that answered in the wrong shape still answered, and throwing that away
     // would be worse than showing it as one bubble - UNLESS what it wrote is
@@ -225,6 +252,8 @@ async function attemptReason(
     reasoningWorked();
     return {
       parts: final,
+      ops,
+      raw: data.content ?? [],
       text,
       model: data.model ?? model,
       stopReason: data.stop_reason ?? null,

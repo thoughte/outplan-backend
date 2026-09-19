@@ -308,6 +308,34 @@ prompt rule and cannot be talked out of a check.
 ### `GET /api/v1/talk` · `GET /api/v1/talk/:id` · `GET /api/v1/talk/export`
 List (`?day=`, `?limit=`, `?cursor=`), one, and everything.
 
+### `POST /api/v1/talk/attach` (multipart)
+Body: `file`, optional `said` → `201 { data: Exchange, file, duplicate }`
+
+Say something with a file attached. The file goes through the **same** store and
+digest as the Records screen: identity check, collection date, duplicate check.
+Chat is not a second door with weaker locks.
+
+The model is told the file exists and its name. It never reads numbers out of it.
+
+### `DELETE /api/v1/talk/:id/did/:opId`
+→ `200 { data: Exchange }`
+
+Undo one thing the assistant did on that message. Each operation carries its own
+undo, required by the type system when it was written. The entry is marked
+undone, not removed. Safe to call twice.
+
+**What the assistant can do**, and nothing else:
+
+| tier | operations |
+|---|---|
+| read | `read_record`, `read_today`, `read_goals`, `read_roots` |
+| write, undoable | `log`, `mark_plan_item`, `confirm_goal`, `drop_goal` |
+
+Absent by design, and therefore unreachable: anything writing a measurement,
+report, symptom, medicine or genetic marker (those come from `digest.ts`);
+anything touching another person (care links, invites, neighbours); anything that
+deletes rather than abandons.
+
 ### `DELETE /api/v1/talk/:id/record`
 → `200 { data: Exchange }`
 

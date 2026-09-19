@@ -175,6 +175,16 @@ model Exchange {
   /// Shape: { messages: string[], question?: { text: string, options: string[] } }
   replyParts    Json?    @map("reply_parts")
 
+  /// What the assistant DID for them on this message, if anything.
+  ///
+  /// One entry per operation it ran: the name, what it was given, what came
+  /// back, and the line shown under the reply. A write the person cannot see is
+  /// a write they cannot object to, so every one appears here and every one can
+  /// be undone from here.
+  ///
+  /// Shape: [{ id, name, input, result, say }]
+  didThings     Json?    @map("did_things")
+
   repliedAt     DateTime? @map("replied_at")
   model         String?
   promptVersion String?  @map("prompt_version")

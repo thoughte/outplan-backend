@@ -2,6 +2,8 @@
 
 Status: building, 19 Sep 2026.
 
+In the app: Anything read out of a message shows under it as one line, with "not right" to remove it. Removing it also unticks whatever it ticked on the day plan.
+
 ## Where this came from
 
 The PRD asks for a confirmation step before anything extracted from a

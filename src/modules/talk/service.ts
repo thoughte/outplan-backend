@@ -9,6 +9,10 @@ import { localDay, clockFor } from '../../shared/helper';
 import { recordFrom } from '../record/extract';
 import { redFlag } from '../farm/safety';
 import { reasoningHealth } from '../../lib/reasoning-health';
+import { OPS, BY_NAME } from './tools/ops';
+import { toolSchema } from './tools/registry';
+import { runOp } from './tools/run';
+import { platformNotes } from './tools/platform';
 import { prisma } from '../../lib/prisma';
 import { talkRepo } from './repo';
 import {
@@ -52,9 +56,13 @@ function stripQuestion(text: string, question?: { text: string }): string {
   return text.endsWith(tail) ? text.slice(0, -tail.length).trimEnd() : text;
 }
 
+/** One thing the assistant did, as stored on the exchange. */
+interface DidThing { id: string; name: string; input: unknown; result: unknown; say?: string; undone?: boolean }
+
 export interface TalkService {
   say(userId: string, input: CreateExchangeInput): Promise<ExchangeResponse>;
   unrecord(userId: string, id: string): Promise<ExchangeResponse>;
+  undoThing(userId: string, id: string, opId: string): Promise<ExchangeResponse>;
   list(userId: string, q: ListQuery): Promise<ExchangeResponse[]>;
   one(userId: string, id: string): Promise<ExchangeResponse>;
   correct(userId: string, id: string, input: CorrectInput): Promise<ExchangeResponse>;
@@ -130,6 +138,20 @@ export const talkService: TalkService = {
       // model would answer it. As instructions it is background the assistant
       // simply has - which is what knowing someone means.
       const brief = await buildBrief(userId).catch(() => null);
+      const platform = await platformNotes().catch(() => '');
+
+      // A file came with this message. The model is told it exists and what it
+      // is called, and explicitly told not to read anything out of it. Numbers
+      // reach the record through digest, which checks the name on the document,
+      // refuses anything with no collection date, and recognises a duplicate. A
+      // model reading "ApoB 121" off a photo is the hallucinated record with a
+      // camera attached.
+      const attached = input.attachedFileId
+        ? await prisma.storedFile.findFirst({
+            where: { id: input.attachedFileId, userId },
+            select: { filename: true, kind: true, mediaType: true, digestNote: true },
+          })
+        : null;
       const { turns, summary } = await buildContext(userId, exchange.id);
 
       // Order matters. The prompt is who it is, the record is what is true, and
@@ -173,6 +195,16 @@ export const talkService: TalkService = {
         askLine ? `---\n\n${askLine}` : null,
         brief ? `---\n\n${brief}` : null,
         summary ? `---\n\nEARLIER IN THIS CONVERSATION, condensed:\n\n${summary}` : null,
+        // What the app can do, so "how do I see my goals" gets a real answer.
+        platform ? `---\n\n${platform}` : null,
+        attached
+          ? `---\n\nTHEY ATTACHED A FILE: ${attached.filename} (${attached.mediaType}).\n`
+            + 'It is stored and it will be read on its own, properly, by the part of this\n'
+            + 'system that checks the name on the document, refuses anything with no\n'
+            + 'collection date, and notices a duplicate. You do NOT read numbers out of it\n'
+            + 'and you do not guess at what it says. Acknowledge it arrived, say it is being\n'
+            + 'read, and answer whatever they actually asked.'
+          : null,
       ].filter(Boolean).join('\n\n');
 
       // The unanswered ones and this one go in as ONE user turn. Consecutive
@@ -188,10 +220,42 @@ export const talkService: TalkService = {
       answered ? `${answered}\n${input.said}` : input.said,
     ].join('\n');
 
-      const result = await reason(system, [
+      // Operations, and the loop that runs them.
+      //
+      // The model may ask for several before it has anything to say: read the
+      // plan, then tick two items off it, then reply. Each round runs what it
+      // asked for, hands back the results, and asks again. Bounded, because a
+      // loop that can go round forever on somebody's health record is not a
+      // feature.
+      const ran: Array<{ id: string; name: string; input: unknown; result: unknown; say?: string }> = [];
+      const history: Array<{ role: 'user' | 'assistant'; content: unknown }> = [
         ...turns,
         { role: 'user' as const, content: saidNow },
-      ]);
+      ];
+
+      let result = await reason(system, history, { tools: OPS.map(toolSchema) });
+
+      for (let round = 0; round < 4 && result?.ops.length; round++) {
+        const results: unknown[] = [];
+        for (const ask of result.ops) {
+          const out = await runOp(ask, { userId, localDay: exchange.localDay, exchangeId: exchange.id });
+          ran.push({ id: ask.id, name: ask.name, input: ask.input, result: out.result, say: out.say });
+          results.push({ type: 'tool_result', tool_use_id: ask.id, content: JSON.stringify(out.result).slice(0, 4000) });
+        }
+        history.push({ role: 'assistant' as const, content: result.raw });
+        history.push({ role: 'user' as const, content: results });
+        result = await reason(system, history, { tools: OPS.map(toolSchema) });
+      }
+
+      // Everything it did goes on the exchange, so the screen can name each one
+      // and offer to undo it. A write the person cannot see is a write they
+      // cannot object to.
+      if (ran.length) {
+        await prisma.exchange.update({
+          where: { id: exchange.id },
+          data: { didThings: ran.map(({ id, name, input, result: r, say }) => ({ id, name, input, result: r, say })) as never },
+        }).catch(() => undefined);
+      }
       if (result) {
         // The ceiling, enforced here rather than trusted to the prompt.
         //
@@ -333,6 +397,43 @@ export const talkService: TalkService = {
     ]);
 
     console.log(`[record] removed ${ids.length} observation(s) read from one message`);
+    return this.one(userId, id);
+  },
+
+  /** Undo one thing the assistant did on a message.
+   *
+   *  Every operation is recorded with what it was given and what came back, and
+   *  each one carries its own `undo`, which the type system required when the
+   *  operation was written. So this is a lookup and a call, not a guess at how
+   *  to reverse something.
+   *
+   *  The entry is marked rather than removed. What the assistant did and what
+   *  he thought of it are both part of the record, and a row that vanishes
+   *  takes the reason it existed with it. */
+  async undoThing(userId, id, opId) {
+    const ex = await prisma.exchange.findFirst({
+      where: { id, userId }, select: { didThings: true, localDay: true },
+    });
+    if (!ex) throw notFound('No such message');
+
+    const things = Array.isArray(ex.didThings) ? (ex.didThings as unknown as DidThing[]) : [];
+    const thing = things.find((t) => t.id === opId);
+    if (!thing) throw notFound('Nothing like that on this message');
+    if (thing.undone) return this.one(userId, id);
+
+    const op = BY_NAME.get(thing.name);
+    if (op?.tier === 'undoable') {
+      await op.undo(
+        { input: thing.input, result: thing.result },
+        { userId, localDay: ex.localDay, exchangeId: id },
+      );
+    }
+
+    await prisma.exchange.update({
+      where: { id },
+      data: { didThings: things.map((t) => (t.id === opId ? { ...t, undone: true } : t)) as never },
+    });
+    console.log(`[tools] undid ${thing.name} on one message`);
     return this.one(userId, id);
   },
 

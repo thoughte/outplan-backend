@@ -39,7 +39,7 @@ export const upload = multer({
  *  record is not. Guessing a name from an email address would be a very bad way
  *  to be wrong.
  */
-async function readSoon(userId: string): Promise<void> {
+export async function readSoon(userId: string): Promise<void> {
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
   const name = me?.name?.trim();
   if (!name) {

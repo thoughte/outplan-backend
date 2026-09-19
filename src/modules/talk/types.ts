@@ -7,6 +7,10 @@ export const createExchangeSchema = z.object({
    *  he taps an offered option, never when he types. Ignored if it does not
    *  point at one of his own exchanges. */
   answering: z.string().uuid().optional(),
+  /** Set when the message came with a file. The model is told the file exists
+   *  and what it is; it never reads numbers out of it. Measurements come from
+   *  digest or not at all. */
+  attachedFileId: z.string().uuid().optional(),
 });
 export type CreateExchangeInput = z.infer<typeof createExchangeSchema>;
 

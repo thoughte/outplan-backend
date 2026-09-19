@@ -4,6 +4,8 @@ Status: **built and live**, 19 Sep 2026. Name and date of birth are asked for;
 the city question was removed the same day and is now a PLANNED item (see
 `PLANNED.md`), with the clock taken from the device in the meantime.
 
+In the app: Setup asks for name and date of birth once, on first open. The clock comes from the device. Change either in Settings.
+
 ## What he asked for
 
 > "when a user signs up, we need to know their name, date of birth, and city

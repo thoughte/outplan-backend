@@ -2,6 +2,8 @@
 
 Status: planning, 19 Sep 2026.
 
+In the app: The chat can read their record and do things for them: log what they did, tick the day plan, confirm or drop a goal, take a file. Anything it writes shows in the reply and can be undone.
+
 ## His words
 
 > 1. we should be able to attach images or files in chat.

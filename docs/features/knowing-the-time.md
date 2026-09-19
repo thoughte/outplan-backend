@@ -4,6 +4,8 @@ Status: **built and live**, 19 Sep 2026. The local date, time and weekday go
 into every message, and where the zone is unknown the model is told to say so
 rather than guess. The timezone half was superseded by `account-setup.md`.
 
+In the app: The assistant knows their local time and date, so "just had breakfast" lands on the right day.
+
 ## What he asked for
 
 > "i was chatting in outplan. It doesnt even know in which time zone I am in.
