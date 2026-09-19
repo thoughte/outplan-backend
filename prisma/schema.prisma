@@ -551,6 +551,10 @@ model Observation {
 
   @@index([userId, localDay])
   @@index([userId, variable, localDay])
+  /// Created by the migration that added `said`, and left out of the schema
+  /// until db:check reported the difference. It exists so "what did they say
+  /// they WOULD do" is an index read rather than a scan of every observation.
+  @@index([userId, said])
   @@map("observations")
 }
 
