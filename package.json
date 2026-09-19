@@ -17,7 +17,9 @@
     "upload:record": "ts-node scripts/upload-record.ts",
     "docs:check": "ts-node scripts/docs-check.ts",
     "db:check": "prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource prisma.config.mjs --exit-code",
-    "goals:dupes": "tsx scripts/goal-dupes.ts"
+    "goals:dupes": "tsx scripts/goal-dupes.ts",
+    "prompt:show": "tsx scripts/prompt-publish.ts",
+    "prompt:publish": "tsx scripts/prompt-publish.ts --publish"
   },
   "keywords": [],
   "author": "",
