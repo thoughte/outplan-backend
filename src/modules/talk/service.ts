@@ -244,7 +244,10 @@ export const talkService: TalkService = {
         }
         history.push({ role: 'assistant' as const, content: result.raw });
         history.push({ role: 'user' as const, content: results });
-        result = await reason(system, history, { tools: OPS.map(toolSchema) });
+        // Longer after an operation ran. Breaking a goal down calls the model
+        // again and takes the best part of a minute, and the default here would
+        // give up while that was still in flight.
+        result = await reason(system, history, { tools: OPS.map(toolSchema), timeoutMs: 120_000 });
       }
 
       // Everything it did goes on the exchange, so the screen can name each one

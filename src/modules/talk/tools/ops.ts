@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { buildBrief } from '../../record/brief';
 import { confirm as confirmGoal, abandon as abandonGoal, tree, scoreboard } from '../../goal/service';
+import { draft, save } from '../../goal/decompose';
 import { planFor, setDone } from '../../plan/service';
 import { rootsFor } from '../../farm/roots';
 import { SAID, type Said } from '../../record/extract';
@@ -57,7 +58,34 @@ const readGoals = defineOp({
   schema: z.object({}),
   run: async (_input, ctx) => {
     const [goals, score] = await Promise.all([tree(ctx.userId), scoreboard(ctx.userId)]);
-    return { ok: true, result: { goals, scoreboard: score } };
+
+    // FLATTENED AND TRIMMED. The full tree came back at 80,541 bytes on his
+    // account, every `why` and every nested standing, and all of it went into
+    // the model's context on any question about goals. It crowded out the
+    // conversation and it was paid for twice, once in and once out.
+    //
+    // What a decision actually needs: the id, what it is, where it sits, and
+    // how it stands in one line. `why` is left out; if it matters for one goal
+    // it can be asked for, and it never matters for forty.
+    const flat: Array<Record<string, unknown>> = [];
+    const walk = (nodes: typeof goals, under: string | null) => {
+      for (const g of nodes) {
+        if (g.status !== 'abandoned') {
+          flat.push({
+            id: g.id,
+            title: g.title,
+            status: g.status,
+            under,
+            ...(g.inferred ? { inferred: true } : {}),
+            ...(g.kind === 'container' ? {} : { standing: g.standing.summary }),
+          });
+        }
+        walk(g.children, g.title);
+      }
+    };
+    walk(goals, null);
+
+    return { ok: true, result: { goals: flat, scoreboard: { thisMonth: score.thisMonth, thisYear: score.thisYear, total: score.total } } };
   },
 });
 
@@ -205,10 +233,56 @@ const dropGoal = defineOp({
   },
 });
 
+const proposeGoal = defineOp({
+  tier: 'undoable',
+  name: 'propose_goal',
+  description:
+    'Create a new goal from something they want to change. Say it in THEIR words: '
+    + '"do a workout at least 15 minutes a day", "stop alcohol". It is broken into '
+    + 'pieces small enough to finish, grounded in what is already in their record, '
+    + 'and everything it makes is a PROPOSAL they confirm. Nothing goes live here. '
+    + 'This takes a few seconds, so say what you are doing before calling it.',
+  schema: z.object({
+    intent: z.string().min(3).max(500).describe(
+      'What they want to change, in their own words. Not your rephrasing of it: '
+      + 'it is stored and shown back to them as the reason these goals exist.'),
+  }),
+  run: async (input, ctx) => {
+    const drafted = await draft(ctx.userId, input.intent);
+    if (!drafted.goals.length) {
+      return { ok: false, result: { error: drafted.failure ?? 'could not break that down just now' } };
+    }
+    const before = await prisma.goal.findMany({
+      where: { userId: ctx.userId }, select: { id: true },
+    });
+    const n = await save(ctx.userId, input.intent, ctx.exchangeId, drafted.goals);
+    const after = await prisma.goal.findMany({
+      where: { userId: ctx.userId }, select: { id: true },
+    });
+    const seen = new Set(before.map((g) => g.id));
+    const created = after.map((g) => g.id).filter((id) => !seen.has(id));
+
+    return {
+      ok: true,
+      result: { created: n, ids: created },
+      say: `added ${n} ${n === 1 ? 'goal' : 'goals'} to look at: "${input.intent}"`,
+    };
+  },
+  undo: async (call, ctx) => {
+    // Abandoned, never deleted, the same rule the rest of the goal code holds.
+    const ids = (call.result as { ids?: string[] })?.ids ?? [];
+    if (ids.length) {
+      await prisma.goal.updateMany({
+        where: { id: { in: ids }, userId: ctx.userId }, data: { status: 'abandoned' },
+      });
+    }
+  },
+});
+
 /** The table. Absent means unreachable. */
 export const OPS: Op[] = [
   readRecord, readPlan, readGoals, readRoots,
-  logIt, markDone, setGoal, dropGoal,
+  logIt, markDone, proposeGoal, setGoal, dropGoal,
 ];
 
 export const BY_NAME = new Map(OPS.map((o) => [o.name, o]));

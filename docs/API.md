@@ -329,7 +329,7 @@ undone, not removed. Safe to call twice.
 | tier | operations |
 |---|---|
 | read | `read_record`, `read_today`, `read_goals`, `read_roots` |
-| write, undoable | `log`, `mark_plan_item`, `confirm_goal`, `drop_goal` |
+| write, undoable | `log`, `mark_plan_item`, `propose_goal`, `confirm_goal`, `drop_goal` |
 
 Absent by design, and therefore unreachable: anything writing a measurement,
 report, symptom, medicine or genetic marker (those come from `digest.ts`);
