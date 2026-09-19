@@ -222,8 +222,26 @@ async function context(userId: string): Promise<string> {
   ].join('\n');
 }
 
-export async function draft(userId: string, intent: string): Promise<Drafted[] | null> {
-  if (!ENV_CONFIG.ANTHROPIC_API_KEY) return null;
+/** Why a decomposition produced nothing.
+ *
+ *  Every failure used to collapse into one sentence, "Could not break that down
+ *  into goals just now", with the reason visible only in a server log nobody
+ *  can reach. Running four of his own intents against production, two worked and
+ *  two failed identically, and from outside there was no way to tell a model
+ *  that declined from one that timed out, ran out of room, or was never
+ *  configured. That is the difference between a bug to fix and a boundary to
+ *  respect, and it has to be legible. */
+export type DraftFailure = 'no_key' | 'upstream' | 'timeout' | 'no_tool_call' | 'empty';
+
+export interface DraftResult {
+  goals: Drafted[];
+  failure?: DraftFailure;
+  /** What the model said it stopped for, when it said anything. */
+  stopReason?: string | null;
+}
+
+export async function draft(userId: string, intent: string): Promise<DraftResult> {
+  if (!ENV_CONFIG.ANTHROPIC_API_KEY) return { goals: [], failure: 'no_key' };
   const model = await getSetting('reasoning.model').catch(() => 'claude-opus-5');
 
   const ctl = new AbortController();
@@ -245,15 +263,34 @@ export async function draft(userId: string, intent: string): Promise<Drafted[] |
       }),
       signal: ctl.signal,
     });
-    if (!res.ok) { console.error('[goals] upstream returned', res.status); return null; }
-    const data = (await res.json()) as { content?: Array<{ type: string; name?: string; input?: unknown }> };
+    if (!res.ok) {
+      console.error(`[goals] upstream ${res.status} for "${intent}": ${(await res.text()).slice(0, 400)}`);
+      return { goals: [], failure: 'upstream' };
+    }
+    const data = (await res.json()) as {
+      content?: Array<{ type: string; name?: string; input?: unknown; text?: string }>;
+      stop_reason?: string | null;
+    };
     const call = (data.content ?? []).find((b) => b.type === 'tool_use' && b.name === TOOL.name);
-    const goals = (call?.input as { goals?: unknown })?.goals;
-    const cleaned = clean(goals);
-    return cleaned.length ? cleaned : null;
+    if (!call) {
+      // A forced tool call that came back without one. The model said something
+      // instead, and that something is the only explanation anybody will get,
+      // so it goes in the log verbatim rather than being thrown away.
+      const said = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join(' ').slice(0, 500);
+      console.error(`[goals] no tool call for "${intent}" (stop_reason ${data.stop_reason}): ${said || '(nothing)'}`);
+      return { goals: [], failure: 'no_tool_call', stopReason: data.stop_reason ?? null };
+    }
+    const cleaned = clean((call.input as { goals?: unknown })?.goals);
+    if (!cleaned.length) {
+      console.error(`[goals] tool call had no usable goals for "${intent}" (stop_reason ${data.stop_reason})`);
+      return { goals: [], failure: 'empty', stopReason: data.stop_reason ?? null };
+    }
+    console.log(`[goals] "${intent}" broke into ${cleaned.length} top-level (stop_reason ${data.stop_reason})`);
+    return { goals: cleaned, stopReason: data.stop_reason ?? null };
   } catch (e) {
-    console.error('[goals] could not break it down:', (e as Error).message);
-    return null;
+    const aborted = (e as Error).name === 'AbortError';
+    console.error(`[goals] could not break down "${intent}":`, (e as Error).message);
+    return { goals: [], failure: aborted ? 'timeout' : 'upstream' };
   } finally {
     clearTimeout(timer);
   }
