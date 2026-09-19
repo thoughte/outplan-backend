@@ -1,11 +1,15 @@
 # Goals: the view
 
-Status: **superseded by `grove.md`.** Backend is built and live.
+Status: **backend live since 17 Sep. Screen being built 19 Sep 2026.**
 
-The gamified view planned here is the farm. Kept for the decisions it records -
-counting finished goals rather than averaging a percentage, celebrating
-achievement only, and the three open questions at the bottom, which are still
-open.
+Marked superseded once, wrongly. The farm took over the *daily* gamified surface
+and that was right, but the farm shows habits this week and it cannot show a goal
+finishing. "You achieved 6 goals this month and 28 this year" is the thing he
+asked for out loud, and nothing rendered it: four endpoints and a scoreboard sat
+live with no `goals` entry in the frontend at all.
+
+So this plan stands, unchanged in its decisions. What follows the decisions
+section is what has changed underneath it since.
 
 ## What he asked for
 
@@ -159,3 +163,63 @@ standing rule. Specifically: that a goal with no baseline reads "not started"
 and not 0%; that the month and year counts match a direct count of `achieved`
 rows; that a branch whose children are all waiting does not show a confident
 percentage; and that the screen is usable at 375px with one hand.
+
+---
+
+## What changed under this plan, 19 Sep 2026
+
+The three questions at the bottom of this file were closed, and two of them
+change what the screen has to render.
+
+**Confirming cascades.** `POST /goals/:id/confirm` now confirms the subtree and
+returns `{ goal, alsoConfirmed }`, a count. The screen must say what just
+happened: confirming one card can quietly activate eleven goals, and a number
+that changed without being announced is the thing this whole app is against.
+
+**`inferred` is on every node.** A goal reasoned to rather than read off the
+record is marked, and confirming its parent deliberately does NOT confirm it. On
+screen that is two things: a visible mark saying where it came from, and its own
+confirm control even when its parent is already active. It is never styled as a
+lesser goal, because it may well be right.
+
+**`ASNEEDED` medicines no longer generate branches.** Nothing to render, but it
+is why the tree is smaller than the 40 this file was written against.
+
+## What the screen renders, given the API
+
+`GET /goals` returns `{ goals: GoalNode[], scoreboard }`. Per node: `title`,
+`why`, `kind`, `status`, `inferred`, `baselineValue`, `targetValue`,
+`blockedBy[]`, `standing { fraction, current, reached, summary }`, `children[]`.
+
+Three layers, one on screen at a time, exactly as decided above.
+
+**Top.** `scoreboard.thisMonth` and `thisYear`, then the two or three closest to
+done. Closest means highest `standing.fraction`, and a node with `fraction: null`
+is never "closest to done", it has not started.
+
+**Middle.** Top-level branches as cards. Each shows finished over total and how
+many are still waiting for a first number. Never an averaged percentage across
+children: the decision above says count, and a roll-up of a tree where half the
+leaves are `null` is a number nothing supports.
+
+**Bottom.** One goal: `standing.summary` as the headline because it is already
+written for a screen, then baseline, current and target, then what blocks it.
+
+**Proposed goals are not in the tree view.** They are a separate stack at the
+top, because a proposal is a question waiting on him and the tree is a record of
+what he decided. Mixing them makes the count meaningless.
+
+## What the screen must never do
+
+- Render `fraction: null` as 0%. It is "not started". This is the single most
+  likely bug and it is the one that would misreport his health.
+- Average anything. Every number traces to a count or to `standing`.
+- Celebrate a bar moving. Achievement only, per the decision above.
+- Show an inferred goal as though the record said it.
+
+## How it gets checked
+
+Driven in the preview harness before he sees it, per the standing rule, with
+seeded data shaped like the awkward cases rather than the tidy one: a branch
+whose children are all `waiting_baseline`, a goal with `fraction: null`, an
+inferred child under a confirmed parent, a blocked goal, and an achieved one.
