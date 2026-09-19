@@ -313,6 +313,29 @@ One difference is expected and cannot be removed: the covering index on
 `measurements` uses `INCLUDE`, which Prisma cannot express. Anything else
 appearing here is drift worth fixing.
 
+## The prompt upgrades itself, unless somebody edited it
+
+The text the chat runs on lives in the `prompts` table as numbered versions, not
+in the code. `ensureDefaultPrompts` publishes the version in
+`modules/prompt/defaults.ts` at boot and activates it.
+
+It refuses to touch a row this repository did not write, because silently
+reverting an edit made in production is the worst thing it could do. It knows its
+own rows two ways: the note `shipped default`, or a content hash listed in `OURS`.
+
+That list exists because the note alone was not enough. Versions 2 to 5 were
+written from here in earlier sessions with descriptive notes instead of the
+marker, so the upgrade read them as somebody's hand edit. v5 froze on 18 Sep and
+every later change to the prompt was inert for a week: the question-chain
+rewrite, the closing rules, all of it sat in the file while the live prompt kept
+saying "QUESTION: use it often".
+
+**Adding a hash to `OURS` is a deliberate act.** Only ever name a text this
+repository produced. The check is whether the row's notes read like a changelog
+entry written here rather than something a person typed.
+
+    npm run prompt:show       what is live, and what a deploy would change
+
 ## One goal is counted once
 
     npm run goals:dupes <email>          list

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { promptRepo } from './repo';
 
 export const TALK_PROMPT_KEY = 'talk.system';
@@ -234,9 +235,50 @@ When they say you got it wrong, they are usually right. They have the body; you
 have a description of it. One line to say what you got wrong, fix it, move on.`;
 
 /** Marks a row as text this repository shipped, rather than text a person
- *  wrote. It is the only way to tell the two apart later, and telling them
- *  apart is what makes an automatic upgrade safe. */
+ *  wrote. Telling the two apart is what makes an automatic upgrade safe. */
 const SHIPPED = 'shipped default';
+
+/** Every prompt this repository has ever put into the database, by content hash.
+ *
+ *  The notes marker was not enough. Versions 2 to 5 were written from here in
+ *  earlier sessions and given descriptive notes instead of the marker, so the
+ *  upgrade correctly read them as somebody's hand edit and refused to touch
+ *  them. The result was that v5 froze on 18 Sep and every later change to the
+ *  text in this file was inert: the question-chain rewrite, the closing rules,
+ *  the guess-stays-a-guess rule, all of it sat here while the live prompt kept
+ *  telling a real person's assistant to "use it often".
+ *
+ *  Deleting the guard would have fixed that and broken the thing the guard is
+ *  for. So instead the repository states, explicitly and auditably, which exact
+ *  texts are its own. Anything not on this list and not carrying the marker is
+ *  still left completely alone, because that is a genuine edit made in
+ *  production and reverting it silently is the worst thing this function could
+ *  do.
+ *
+ *  Adding to this list is a deliberate act. It should only ever name a text this
+ *  repository produced, and the way to check is that the row's notes read like a
+ *  changelog entry written here rather than something a person typed at 2am.
+ *
+ *  Authorised by him, 19 Sep 2026: "make the deploy handle it".
+ */
+const OURS = new Set([
+  '98c269c0ea712f9a',   // v1  shipped default
+  '7b8c9d0f395b5b1b',   // v2  warmer: a friend, not a teacher
+  '8834ab18e2b2db2c',   // v3  reply tool, short messages, tappable questions
+  '45c9dd962a51c1ec',   // v4  nothing is off topic; listen then steer
+  'a7d3eb5696c43cf7',   // v5  no em dashes, no AI tells
+]);
+
+/** Short content hash, the same way the list above was produced. */
+function fingerprint(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+/** Is this row one this repository wrote? Either it carries the marker, or its
+ *  text is one we have shipped before. */
+function ours(row: { content: string; notes: string | null }): boolean {
+  return row.notes === SHIPPED || OURS.has(fingerprint(row.content));
+}
 
 /** Applied at boot, like a migration.
  *
@@ -267,7 +309,7 @@ export async function ensureDefaultPrompts(): Promise<void> {
   const active = await promptRepo.active(TALK_PROMPT_KEY);
 
   if (active) {
-    if (active.notes !== SHIPPED) {
+    if (!ours(active)) {
       // Somebody wrote this. Leave it alone and say so, loudly enough that the
       // next person wondering why their edit to this file did nothing can find
       // the answer in the boot log rather than in the database.
@@ -289,7 +331,7 @@ export async function ensureDefaultPrompts(): Promise<void> {
   // partway through a previous move.
   const versions = await promptRepo.list(TALK_PROMPT_KEY);
   const latest = versions[0];
-  if (latest && (latest.notes !== SHIPPED || latest.content === TALK_V2)) {
+  if (latest && (!ours(latest) || latest.content === TALK_V2)) {
     await promptRepo.activate(latest.key, latest.version);
     return;
   }
