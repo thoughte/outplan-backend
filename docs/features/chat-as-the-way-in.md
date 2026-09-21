@@ -103,6 +103,16 @@ document that will be wrong within a week.
 **Tools, not a second prompt.** The model already answers by calling `reply`.
 Operations are more tools beside it, and `tool_choice` stops being forced.
 
+**Corrected 21 Sep 2026.** With `tool_choice: any` the model routinely answers a
+question that needs the record with a turn that contains ONLY an operation
+(`read_today`, no reply, no text). The build treated that turn as "nothing
+usable", retried it, and wrote the fallback: every such message for a day got
+"I could not get through", and `/health` said `brain: null` throughout because
+the empty-reply path recorded nothing. An operations-only turn is a turn; the
+loop runs it. A 200 with no content is recorded as a failure, and the fallback
+row carries the status and error type. Reproduced against the bridge with the
+production token before and after the fix (5421f7d).
+
 **Three tiers, and the tier decides the ceremony.**
 
 **Free.** Reading anything of his, and logging what he says he did. Already how
