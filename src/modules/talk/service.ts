@@ -292,6 +292,10 @@ export const talkService: TalkService = {
         // give up while that was still in flight.
         result = await reason(system, history, { tools: OPS.map(toolSchema), timeoutMs: 120_000 });
       }
+      // Four rounds of reading and still nothing said is not an answer. A turn
+      // with operations and no words is valid INSIDE the loop; left over after
+      // the cap it must not be stored as an empty reply.
+      if (result && !result.parts.messages.length) result = null;
 
       // Everything it did goes on the exchange, so the screen can name each one
       // and offer to undo it. A write the person cannot see is a write they
@@ -353,7 +357,11 @@ export const talkService: TalkService = {
           // Anything reading back promptVersion to judge a reply must not find
           // one here.
           model: 'unavailable',
-          promptVersion: brain.status ? `unavailable:${brain.status}` : 'unavailable',
+          // The status AND the type, so a row can say 429 rate_limit_error
+          // rather than a bare 'unavailable' nobody can act on.
+          promptVersion: brain.status
+            ? `unavailable:${brain.status}${brain.type ? ':' + brain.type : ''}`
+            : 'unavailable',
         });
         console.error('[talk] no reply produced; reasoning health:', JSON.stringify(brain));
       }

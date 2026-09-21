@@ -234,17 +234,29 @@ async function attemptReason(
       .map((b) => b.text as string).join('\n').trim();
     const fallback = isStageDirection(fallbackRaw) ? '' : fallbackRaw;
 
-    if (!parts && !fallback) {
+    // A turn that only asks for operations is a real turn. The model read the
+    // record before saying anything, which is what the loop exists for, and
+    // this check used to sit BEFORE the operations were handed back: a turn
+    // with a read and no words was thrown away as "nothing usable", retried,
+    // thrown away again, and answered with "I could not get through".
+    if (!parts && !fallback && !ops.length) {
       if (fallbackRaw) {
         console.error('[reason] discarded stage direction instead of replying:',
           JSON.stringify(fallbackRaw.slice(0, 80)));
       }
       // Nothing usable came back. Signalled as a failure so the caller can try
       // again, rather than dressed up as an answer.
+      //
+      // RECORDED as a failure too. It was not, and during a week-long upstream
+      // outage /health reported brain: null throughout: the upstream answered
+      // 200 with nothing in it, this path returned null, and the one place
+      // that is meant to say "the reasoning service is not answering" had
+      // never been told. A 200 with no content is a failed call.
+      reasoningFailed({ status: res.status, type: 'empty_reply' });
       return null;
     }
 
-    const final: ReplyParts | null = parts ?? { messages: [fallback] };
+    const final: ReplyParts = parts ?? { messages: fallback ? [fallback] : [] };
 
     const text = final.messages.join('\n\n') +
       (final.question ? `\n\n${final.question.text}` : '');
